@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import [[ project_slug ]]
+import msw_flir_bonsai
 
 
 def test_version() -> None:
-    assert [[ project_slug ]].__version__ is not None
-    assert isinstance([[ project_slug ]].__version__, str)
+    assert msw_flir_bonsai.__version__ is not None
+    assert isinstance(msw_flir_bonsai.__version__, str)

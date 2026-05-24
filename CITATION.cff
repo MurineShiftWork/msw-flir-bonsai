@@ -1,14 +1,15 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
-title: "[[ project_name ]]"
-repository-code: https://github.com/[[ github_username ]]/[[ github_repo ]]
-url: https://github.com/[[ github_username ]]/[[ github_repo ]]
-license: GPL-3.0
+title: "msw-flir-bonsai: FLIR camera control via Bonsai for murine shift work"
+version: "0.1.0"
+repository-code: https://github.com/larsrollik/msw-flir-bonsai
+url: https://github.com/larsrollik/msw-flir-bonsai
+license: BSD-3-Clause
 authors:
-  - family-names: [[ author_name.split()[-1] ]]
-    given-names: [[ author_name.split()[0] ]]
-    orcid: https://orcid.org/0000-0000-0000-0000  # replace with your ORCID
+  - family-names: Rollik
+    given-names: Lars B.
+    orcid: https://orcid.org/0000-0003-0160-6971
 
 # Zenodo integration (optional):
 # 1. Enable the Zenodo webhook at zenodo.org/account/settings/github
@@ -21,12 +22,12 @@ authors:
 #
 # preferred-citation:
 #   type: software
-#   title: "[[ project_name ]]"
+#   title: "msw-flir-bonsai: FLIR camera control via Bonsai for murine shift work"
 #   authors:
-#     - family-names: ...
-#       given-names: ...
-#       orcid: https://orcid.org/...
-#   year: [[ year ]]
+#     - family-names: Rollik
+#       given-names: Lars B.
+#       orcid: https://orcid.org/0000-0003-0160-6971
+#   year: 2026
 #   publisher:
 #     name: Zenodo
 #   doi: 10.5281/zenodo.XXXXXXX

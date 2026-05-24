@@ -1,7 +1,8 @@
-site_name: [[ project_name ]]
-site_description: [[ project_description ]]
-repo_url: https://github.com/[[ github_username ]]/[[ github_repo ]]
-repo_name: [[ github_username ]]/[[ github_repo ]]
+site_name: msw-flir-bonsai
+site_description: FLIR camera control via Bonsai for murine shift work experiments
+site_url: https://larsrollik.github.io/msw-flir-bonsai/
+repo_url: https://github.com/larsrollik/msw-flir-bonsai
+repo_name: larsrollik/msw-flir-bonsai
 edit_uri: edit/main/docs/
 
 theme:

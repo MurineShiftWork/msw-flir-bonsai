@@ -1,0 +1,12 @@
+# Changes here will be overwritten by Copier
+_commit: v0.5.0
+_src_path: gh:larsrollik/templatepy
+author_email: L.B.Rollik@protonmail.com
+author_name: Lars B. Rollik
+github_repo: msw-flir-bonsai
+github_username: larsrollik
+project_description: FLIR camera control via Bonsai for murine shift work experiments
+project_name: msw-flir-bonsai
+project_slug: msw_flir_bonsai
+python_requires: '3.10'
+year: '2026'

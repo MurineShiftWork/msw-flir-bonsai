@@ -3,20 +3,24 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "[[ project_slug ]]"
+name = "msw_flir_bonsai"
 dynamic = ["version"]
-description = "[[ project_description ]]"
+description = "FLIR camera control via Bonsai for murine shift work experiments"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { file = "LICENSE" }
 authors = [
-    { name = "[[ author_name ]]", email = "[[ author_email ]]" },
+    { name = "Lars B. Rollik", email = "L.B.Rollik@protonmail.com" },
 ]
-requires-python = ">=[[ python_requires ]]"
-dependencies = []
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+]
 
 [project.urls]
-Repository = "https://github.com/[[ github_username ]]/[[ github_repo ]]"
-"Issue Tracker" = "https://github.com/[[ github_username ]]/[[ github_repo ]]/issues"
+Homepage = "https://github.com/larsrollik/msw-flir-bonsai"
+Documentation = "https://larsrollik.github.io/msw-flir-bonsai/"
+"Issue Tracker" = "https://github.com/larsrollik/msw-flir-bonsai/issues"
 
 # ---------------------------------------------------------------------------
 # Build
@@ -24,16 +28,19 @@ Repository = "https://github.com/[[ github_username ]]/[[ github_repo ]]"
 
 [tool.hatch.version]
 source = "vcs"
-fallback-version = "1.0.0"
+fallback-version = "0.1.0"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/[[ project_slug ]]/_version.py"
+version-file = "src/msw_flir_bonsai/_version.py"
+
+[tool.hatch.build]
+artifacts = ["src/msw_flir_bonsai/bonsai_workflows/*.bonsai"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/[[ project_slug ]]"]
+packages = ["src/msw_flir_bonsai"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/README.md", "/LICENSE", "/pyproject.toml", "/VERSION"]
+include = ["/src/msw_flir_bonsai", "/tests", "/README.md", "/LICENSE", "/pyproject.toml", "/VERSION", "/CITATION.cff"]
 
 # ---------------------------------------------------------------------------
 # Dependencies
@@ -46,6 +53,8 @@ dev = [
     "pytest-cov",
     "pre-commit",
     "mypy",
+]
+docs = [
     "mkdocs-material",
 ]
 
@@ -56,7 +65,7 @@ dev = [
 [tool.commitizen]
 name = "cz_conventional_commits"
 version_provider = "commitizen"
-version = "1.0.0"
+version = "0.1.0"
 version_files = ["VERSION"]
 tag_format = "v$version"
 update_changelog_on_bump = false
@@ -67,7 +76,7 @@ update_changelog_on_bump = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=src/[[ project_slug ]] --cov-report=term-missing --maxfail=5"
+addopts = "--cov=src/msw_flir_bonsai --cov-report=term-missing --maxfail=5"
 
 # ---------------------------------------------------------------------------
 # Ruff
@@ -108,7 +117,7 @@ convention = "numpy"
 # ---------------------------------------------------------------------------
 
 [tool.mypy]
-python_version = "[[ python_requires ]]"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_ignores = true
 ignore_missing_imports = true
