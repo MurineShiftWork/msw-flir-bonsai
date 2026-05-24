@@ -209,23 +209,24 @@ class MultiCameraRunner:
     def from_config(
         cls,
         n_cameras: int,
-        workflow_prefix: str,
+        driver: str,
         output_dir: str | Path,
         session: str,
         fps: int = 60,
-        driver: str = "flycap",
         bonsai_exe: str | Path | None = None,
+        workflow: str = "",
     ) -> MultiCameraRunner:
-        """Convenience constructor: build one runner per camera index.
+        """Build one BonsaiCameraRunner per camera index using the 1-cam workflow.
 
-        workflow_prefix should be e.g. ``"run-flir-flycap-Xcam"`` —
-        ``X`` is replaced with the actual camera count (``"1cam"`` or ``"2cam"``).
+        Each camera runs in its own subprocess; ``n_cameras`` processes are spawned
+        with consecutive ``cam_index`` values (0, 1, …).  The 1-cam workflow is used
+        so each Bonsai process owns exactly one camera — a crash in one does not
+        affect the others.
         """
-        suffix = f"{n_cameras}cam"
-        workflow = workflow_prefix.replace("Xcam", suffix)
+        resolved_workflow = workflow or f"run-flir-{driver}-1cam"
         runners = [
             BonsaiCameraRunner(
-                workflow=workflow,
+                workflow=resolved_workflow,
                 output_dir=output_dir,
                 session=session,
                 cam_index=i,

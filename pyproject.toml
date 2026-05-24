@@ -15,7 +15,14 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "pandas",
+    "typer",
 ]
+
+[project.scripts]
+msw-flir = "msw_flir_bonsai.cli:main"
+
+[project.entry-points."msw.cli"]
+flir = "msw_flir_bonsai.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/larsrollik/msw-flir-bonsai"
