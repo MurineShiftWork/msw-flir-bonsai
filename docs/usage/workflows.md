@@ -26,9 +26,14 @@ Each 1-cam workflow exposes these properties, settable via `Bonsai.exe --start -
 | `basepath` | string | all | Root output directory |
 | `session` | string | all | Session base name |
 | `cam1idx` | int | all | Camera index (0-based) |
-| `cam1fps` | int | flycap only | Target frame rate |
+| `cam1fps` | int | **flycap only** | Target frame rate — sets `FramesPerSecond` on the FlyCapture node |
 | `cam1ts` | bool | flycap only | Enable embedded timestamp |
 | `cam1framecounter` | bool | flycap only | Enable frame counter |
+
+!!! note "Spinnaker frame rate"
+    The Spinnaker workflow has no `cam1fps` externalized property — the frame rate
+    is not settable via CLI `-p`.  Set it directly in the Bonsai workflow XML
+    (open in the Bonsai editor, find the SpinnakerCapture node, set `AcquisitionFrameRate`).
 
 The `BonsaiCameraRunner._build_cmd()` method assembles these into the subprocess
 command automatically.
