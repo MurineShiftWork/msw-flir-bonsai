@@ -16,6 +16,17 @@ theme:
     - navigation.top
     - content.code.copy
 
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_source: true
+            show_root_heading: true
+            members_order: source
+
 markdown_extensions:
   - admonition
   - pymdownx.highlight:
@@ -28,3 +39,8 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Usage:
+      - CLI reference: usage/cli.md
+      - Python API: usage/python.md
+      - Bonsai workflows: usage/workflows.md
+  - API reference: api.md

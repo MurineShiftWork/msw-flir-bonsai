@@ -63,6 +63,7 @@ dev = [
 ]
 docs = [
     "mkdocs-material",
+    "mkdocstrings[python]",
 ]
 
 # ---------------------------------------------------------------------------
@@ -110,6 +111,9 @@ select = [
 ]
 ignore = []
 fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/msw_flir_bonsai/cli.py" = ["B008"]   # Typer uses function calls in defaults by design
 
 [tool.ruff.format]
 quote-style = "double"

@@ -16,12 +16,8 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
 
 import typer
-
-if TYPE_CHECKING:
-    pass
 
 app = typer.Typer(
     name="flir",
@@ -90,13 +86,13 @@ def list_cameras(
 
 def _list_flycap() -> None:
     try:
-        import PyCapture2  # type: ignore[import-untyped]
-    except ImportError:
+        import PyCapture2
+    except ImportError as e:
         typer.echo(
-            "PyCapture2 not installed. Install the FlyCapture2 SDK and its Python wrapper.",
+            "PyCapture2 not installed. Install the FlyCapture2 SDK and Python wrapper.",
             err=True,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     bus = PyCapture2.BusManager()
     n = bus.getNumOfCameras()
@@ -105,20 +101,24 @@ def _list_flycap() -> None:
         cam = PyCapture2.Camera()
         cam.connect(bus.getCameraFromIndex(i))
         info = cam.getCameraInfo()
-        model = info.modelName.decode() if isinstance(info.modelName, bytes) else info.modelName
+        model = (
+            info.modelName.decode()
+            if isinstance(info.modelName, bytes)
+            else info.modelName
+        )
         typer.echo(f"  [{i}]  serial={info.serialNumber}  model={model}")
         cam.disconnect()
 
 
 def _list_spinnaker() -> None:
     try:
-        import PySpin  # type: ignore[import-untyped]
-    except ImportError:
+        import PySpin
+    except ImportError as e:
         typer.echo(
-            "PySpin not installed. Install the Spinnaker SDK and its Python wrapper.",
+            "PySpin not installed. Install the Spinnaker SDK and Python wrapper.",
             err=True,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     system = PySpin.System.GetInstance()
     cam_list = system.GetCameras()
@@ -143,13 +143,17 @@ def _list_spinnaker() -> None:
 @app.command()
 def run(
     output_dir: Path = typer.Argument(..., help="Root directory for video output"),
-    session: str = typer.Argument(..., help="Session name (used for folder/file naming)"),
-    n_cameras: int = typer.Option(1, "--n-cameras", "-n", help="Number of cameras to launch"),
+    session: str = typer.Argument(
+        ..., help="Session name (used for folder/file naming)"
+    ),
+    n_cameras: int = typer.Option(
+        1, "--n-cameras", "-n", help="Number of cameras to launch"
+    ),
     driver: str = typer.Option(
         "flycap", "--driver", "-d", help="Camera driver: flycap or spinnaker"
     ),
     fps: int = typer.Option(60, "--fps", help="Target frame rate (FlyCapture only)"),
-    bonsai_exe: Optional[Path] = typer.Option(
+    bonsai_exe: Path | None = typer.Option(
         None,
         "--bonsai-exe",
         envvar="BONSAI_EXE",
@@ -209,13 +213,17 @@ def test_record(
         help="Output directory for the test recording",
     ),
     session: str = typer.Option("test", "--session", help="Session name"),
-    cam_index: int = typer.Option(0, "--cam-index", "-c", help="Camera index (0-based)"),
-    driver: str = typer.Option("flycap", "--driver", help="Camera driver: flycap or spinnaker"),
-    fps: int = typer.Option(30, "--fps", help="Target frame rate"),
-    duration: float = typer.Option(5.0, "--duration", help="Recording duration in seconds"),
-    bonsai_exe: Optional[Path] = typer.Option(
-        None, "--bonsai-exe", envvar="BONSAI_EXE"
+    cam_index: int = typer.Option(
+        0, "--cam-index", "-c", help="Camera index (0-based)"
     ),
+    driver: str = typer.Option(
+        "flycap", "--driver", help="Camera driver: flycap or spinnaker"
+    ),
+    fps: int = typer.Option(30, "--fps", help="Target frame rate"),
+    duration: float = typer.Option(
+        5.0, "--duration", help="Recording duration in seconds"
+    ),
+    bonsai_exe: Path | None = typer.Option(None, "--bonsai-exe", envvar="BONSAI_EXE"),
     workflow: str = typer.Option(
         "",
         "--workflow",
