@@ -270,3 +270,44 @@ def test_record(
 
 def main() -> None:
     app()
+
+
+# ---------------------------------------------------------------------------
+# MSW argparse plugin registration
+#
+# The MSW CLI plugin loader calls ep.load()(sub_parsers) where sub_parsers is
+# an argparse _SubParsersAction.  This register() function adds a "flir"
+# subparser that passes all remaining args through to the Typer app, avoiding
+# duplication of argument definitions.
+
+
+def _dispatch_flir(args: dict) -> None:
+    import sys
+
+    flir_args: list[str] = args.get("flir_args", []) or ["--help"]
+    old_argv = sys.argv[:]
+    sys.argv = ["msw-flir"] + flir_args
+    try:
+        main()
+    finally:
+        sys.argv = old_argv
+
+
+def register(sub_parsers: object) -> None:
+    """Register flir subcommands with the MSW argparse parser.
+
+    Called by the MSW CLI plugin loader at startup.  Usage after registration:
+        msw flir find-bonsai
+        msw flir list-cameras --driver flycap
+        msw flir run <output_dir> <session> --n-cameras 2
+        msw flir test-record --cam-index 0 --duration 5
+    """
+    import argparse
+
+    p = sub_parsers.add_parser(  # type: ignore[attr-defined]
+        "flir",
+        help="FLIR camera tools (msw-flir-bonsai) — run 'msw flir --help'",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("flir_args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
+    p.set_defaults(func=_dispatch_flir)

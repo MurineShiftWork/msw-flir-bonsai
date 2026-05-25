@@ -6,14 +6,16 @@ All subprocess calls are mocked — no Bonsai installation required.
 from __future__ import annotations
 
 import subprocess
-import threading
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from msw_flir_bonsai.runner import BonsaiCameraRunner, MultiCameraRunner
-
+from msw_flir_bonsai.bonsai_workflows import workflow_path
+from msw_flir_bonsai.runner import (
+    BonsaiCameraRunner,
+    MultiCameraRunner,
+    _find_bonsai_exe,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -155,6 +157,63 @@ class TestStartStop:
 
         assert runner.pid == 99
 
+    def test_wait_returns_returncode(self) -> None:
+        runner = _make_runner()
+        mock_proc = self._mock_process(returncode=0)
+        mock_proc.wait.return_value = 0
+
+        with patch("subprocess.Popen", return_value=mock_proc):
+            runner.start()
+
+        assert runner.wait(timeout=1) == 0
+
+    def test_wait_returns_none_before_start(self) -> None:
+        runner = _make_runner()
+        assert runner.wait() is None
+
+    def test_wait_returns_none_on_timeout(self) -> None:
+        runner = _make_runner()
+        mock_proc = self._mock_process(returncode=None)
+        mock_proc.wait.side_effect = subprocess.TimeoutExpired(cmd="bonsai", timeout=1)
+
+        with patch("subprocess.Popen", return_value=mock_proc):
+            runner.start()
+
+        assert runner.wait(timeout=0.001) is None
+
+    def test_stop_kills_on_terminate_timeout(self) -> None:
+        runner = _make_runner()
+        mock_proc = self._mock_process(returncode=None)
+        mock_proc.wait.side_effect = [
+            subprocess.TimeoutExpired(cmd="bonsai", timeout=0.001),
+            None,
+        ]
+
+        with patch("subprocess.Popen", return_value=mock_proc):
+            runner.start()
+            runner.stop(timeout=0.001)
+
+        mock_proc.terminate.assert_called_once()
+        mock_proc.kill.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _find_bonsai_exe
+
+
+class TestFindBonsaiExe:
+    def test_explicit_path_returned(self) -> None:
+        assert _find_bonsai_exe("C:/Bonsai.exe") == "C:/Bonsai.exe"
+
+    def test_env_var_used_as_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("BONSAI_EXE", "C:/env/Bonsai.exe")
+        assert _find_bonsai_exe(None) == "C:/env/Bonsai.exe"
+
+    def test_neither_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("BONSAI_EXE", raising=False)
+        with pytest.raises(OSError, match="BONSAI_EXE"):
+            _find_bonsai_exe(None)
+
 
 # ---------------------------------------------------------------------------
 # MultiCameraRunner.from_config
@@ -215,6 +274,16 @@ class TestFromConfig:
                 bonsai_exe="C:/Bonsai.exe",
             )
             assert len(multi) == n
+
+
+# ---------------------------------------------------------------------------
+# workflow_path
+
+
+class TestWorkflowPath:
+    def test_unknown_workflow_raises(self) -> None:
+        with pytest.raises(FileNotFoundError, match="not found"):
+            workflow_path("nonexistent-workflow")
 
 
 # ---------------------------------------------------------------------------

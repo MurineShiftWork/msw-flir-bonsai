@@ -63,6 +63,14 @@ def test_load_camera_csv_3col(tmp_path):
     assert "gpio_state" in df.columns
 
 
+def test_load_camera_csv_unknown_cols(tmp_path):
+    csv = tmp_path / "cam.csv"
+    csv.write_text("1,2.0,3,4\n5,6.0,7,8\n")
+    df = load_camera_csv(csv)
+    assert "col0" in df.columns
+    assert len(df) == 2
+
+
 def test_preprocess_no_rollover(tmp_path):
     rows = "\n".join(f"{i},{i * 0.0167},0" for i in range(100))
     csv = tmp_path / "cam.csv"

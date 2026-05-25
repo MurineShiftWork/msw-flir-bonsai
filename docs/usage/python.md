@@ -67,7 +67,7 @@ if client:
     client.teardown()
 ```
 
-See `PLAN_camera_integration.md` for the full integration design.
+See the [murineshiftwork setup config docs](https://larsrollik.github.io/murineshiftwork/setup/) for the full YAML reference.
 
 ---
 

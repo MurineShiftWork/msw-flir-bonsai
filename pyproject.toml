@@ -22,7 +22,7 @@ dependencies = [
 msw-flir = "msw_flir_bonsai.cli:main"
 
 [project.entry-points."msw.cli"]
-flir = "msw_flir_bonsai.cli:app"
+flir = "msw_flir_bonsai.cli:register"
 
 [project.urls]
 Homepage = "https://github.com/larsrollik/msw-flir-bonsai"

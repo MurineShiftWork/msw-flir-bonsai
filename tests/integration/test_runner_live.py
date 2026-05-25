@@ -120,6 +120,7 @@ def test_multi_runner_two_cameras(tmp_path) -> None:
 def test_cli_find_bonsai(capsys) -> None:
     """find-bonsai command finds BONSAI_EXE if it exists on disk."""
     import pathlib
+
     from typer.testing import CliRunner
 
     from msw_flir_bonsai.cli import app
@@ -143,13 +144,20 @@ def test_cli_test_record(tmp_path) -> None:
         app,
         [
             "test-record",
-            "--output-dir", str(tmp_path),
-            "--session", "cli_test",
-            "--cam-index", "0",
-            "--driver", os.environ.get("FLIR_DRIVER", "flycap"),
-            "--fps", "30",
-            "--duration", "3",
-            "--bonsai-exe", BONSAI_EXE,
+            "--output-dir",
+            str(tmp_path),
+            "--session",
+            "cli_test",
+            "--cam-index",
+            "0",
+            "--driver",
+            os.environ.get("FLIR_DRIVER", "flycap"),
+            "--fps",
+            "30",
+            "--duration",
+            "3",
+            "--bonsai-exe",
+            BONSAI_EXE,
         ],
     )
     assert result.exit_code == 0
