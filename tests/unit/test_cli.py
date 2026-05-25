@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
-import pytest
+if TYPE_CHECKING:
+    from pathlib import Path
+
 from typer.testing import CliRunner
 
 from msw_flir_bonsai.cli import app, register

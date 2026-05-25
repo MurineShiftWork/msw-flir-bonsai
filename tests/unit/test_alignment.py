@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -11,7 +10,6 @@ from msw_flir_bonsai.alignment import (
     align_ttl_edges,
     extract_camera_barcodes,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -121,7 +119,9 @@ class TestAlignBarcodes:
 
 
 class TestAlignTtlEdges:
-    def _make_cam_df(self, n_frames: int, fps: float, edge_frames: list[int]) -> pd.DataFrame:
+    def _make_cam_df(
+        self, n_frames: int, fps: float, edge_frames: list[int]
+    ) -> pd.DataFrame:
         ts = [i / fps for i in range(n_frames)]
         gpio = [0] * n_frames
         for f in edge_frames:
