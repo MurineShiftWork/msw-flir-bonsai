@@ -191,7 +191,7 @@ offset_s = align_ttl_edges(df, bpod_trial_starts)
 ## Development setup
 
 ```sh
-git clone https://github.com/larsrollik/msw-flir-bonsai.git
+git clone https://github.com/murineshiftwork/msw-flir-bonsai.git
 cd msw-flir-bonsai
 uv sync --extra dev
 uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
