@@ -62,7 +62,10 @@ class BonsaiCameraRunner:
         output_dir: Root directory under which session subdirectories are created.
         session: Session base name used to name output files and folders.
         cam_index: Camera index passed to the workflow (``cam1idx`` property).
-        fps: Target frame rate (FlyCapture only; ignored for Spinnaker).
+        fps: Target frame rate (FlyCapture only; ignored for Spinnaker).  Frame
+            rate should be configured in the SDK GUI (FlyCap2 / Spinnaker) and
+            stored in camera non-volatile memory; only pass this for an explicit
+            CLI override.
         driver: ``"flycap"`` or ``"spinnaker"`` — controls which properties are passed.
         extra_props: Additional ``-p key=value`` pairs forwarded to Bonsai CLI.
         startup_timeout: Seconds to wait for the subprocess to start before raising.
@@ -74,7 +77,7 @@ class BonsaiCameraRunner:
         output_dir: str | Path,
         session: str,
         cam_index: int = 0,
-        fps: int = 60,
+        fps: int | None = None,
         driver: str = "flycap",
         bonsai_exe: str | Path | None = None,
         extra_props: dict[str, str] | None = None,
@@ -101,7 +104,8 @@ class BonsaiCameraRunner:
             "cam1idx": str(self._cam_index),
         }
         if self._driver == "flycap":
-            props["cam1fps"] = str(self._fps)
+            if self._fps is not None:
+                props["cam1fps"] = str(self._fps)
             props["cam1ts"] = "True"
             props["cam1framecounter"] = "True"
 
@@ -212,7 +216,7 @@ class MultiCameraRunner:
         driver: str,
         output_dir: str | Path,
         session: str,
-        fps: int = 60,
+        fps: int | None = None,
         bonsai_exe: str | Path | None = None,
         workflow: str = "",
     ) -> MultiCameraRunner:

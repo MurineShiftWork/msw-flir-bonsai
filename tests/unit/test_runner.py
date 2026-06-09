@@ -26,7 +26,7 @@ def _make_runner(
     output_dir: str = "D:/DATA/video",
     session: str = "test",
     cam_index: int = 0,
-    fps: int = 60,
+    fps: int | None = None,
     driver: str = "flycap",
     bonsai_exe: str = "C:/Bonsai/Bonsai.exe",
 ) -> BonsaiCameraRunner:
@@ -46,13 +46,22 @@ def _make_runner(
 
 
 class TestBuildCmd:
-    def test_flycap_includes_fps_and_ts(self) -> None:
-        runner = _make_runner(driver="flycap", fps=30)
+    def test_flycap_includes_ts_and_framecounter(self) -> None:
+        runner = _make_runner(driver="flycap")
         cmd = runner._build_cmd()
         joined = " ".join(cmd)
-        assert "cam1fps=30" in joined
         assert "cam1ts=True" in joined
         assert "cam1framecounter=True" in joined
+
+    def test_flycap_fps_passed_when_set(self) -> None:
+        runner = _make_runner(driver="flycap", fps=30)
+        cmd = runner._build_cmd()
+        assert "cam1fps=30" in " ".join(cmd)
+
+    def test_flycap_fps_omitted_when_none(self) -> None:
+        runner = _make_runner(driver="flycap", fps=None)
+        cmd = runner._build_cmd()
+        assert "cam1fps" not in " ".join(cmd)
 
     def test_spinnaker_omits_fps(self) -> None:
         runner = _make_runner(driver="spinnaker")
