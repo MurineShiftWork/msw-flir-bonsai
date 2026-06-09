@@ -25,9 +25,9 @@ msw-flir = "msw_flir_bonsai.cli:main"
 flir = "msw_flir_bonsai.cli:register"
 
 [project.urls]
-Homepage = "https://github.com/larsrollik/msw-flir-bonsai"
-Documentation = "https://larsrollik.github.io/msw-flir-bonsai/"
-"Issue Tracker" = "https://github.com/larsrollik/msw-flir-bonsai/issues"
+Homepage = "https://github.com/MurineShiftWork/msw-flir-bonsai"
+Documentation = "https://MurineShiftWork.github.io/msw-flir-bonsai/"
+"Issue Tracker" = "https://github.com/MurineShiftWork/msw-flir-bonsai/issues"
 
 # ---------------------------------------------------------------------------
 # Build
