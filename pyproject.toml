@@ -3,7 +3,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "msw_flir_bonsai"
+name = "msw-flir-bonsai"
 dynamic = ["version"]
 description = "FLIR camera control via Bonsai for murine shift work experiments"
 readme = { file = "README.md", content-type = "text/markdown" }
