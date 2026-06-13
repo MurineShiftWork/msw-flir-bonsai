@@ -1,10 +1,12 @@
 # Changes here will be overwritten by Copier
-_commit: v0.5.0
-_src_path: gh:larsrollik/templatepy
+_commit: b17bd06
+_src_path: /home/tars/code/project_templates/templatepy
 author_email: L.B.Rollik@protonmail.com
 author_name: Lars B. Rollik
 github_repo: msw-flir-bonsai
 github_username: larsrollik
+license_type: noncommercial
+private_repo_deps: false
 project_description: FLIR camera control via Bonsai for murine shift work experiments
 project_name: msw-flir-bonsai
 project_slug: msw_flir_bonsai
