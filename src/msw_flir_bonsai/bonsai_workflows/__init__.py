@@ -1,3 +1,15 @@
+"""Bundled Bonsai workflow XMLs and path resolution utilities.
+
+Four workflows are shipped as package data:
+    run-flir-flycap-1cam       -- FlyCapture2, single camera (standard)
+    run-flir-spinnaker-1cam    -- Spinnaker, single camera (standard)
+    run-flir-flycap-2cam       -- FlyCapture2, two cameras in one process (legacy)
+    run-flir-spinnaker-2cam    -- Spinnaker, two cameras in one process (legacy)
+
+Use ``workflow_path(stem)`` to get an absolute filesystem path to any of these.
+``BonsaiCameraRunner`` calls this internally; direct use is rarely needed.
+"""
+
 from pathlib import Path
 
 WORKFLOW_DIR = Path(__file__).parent

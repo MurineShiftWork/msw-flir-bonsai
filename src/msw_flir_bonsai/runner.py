@@ -42,6 +42,7 @@ _STARTUP_TIMEOUT = 30.0
 
 
 def _find_bonsai_exe(bonsai_exe: str | Path | None = None) -> str:
+    """Resolve the Bonsai executable path from the argument or BONSAI_EXE env var."""
     if bonsai_exe:
         return str(bonsai_exe)
     env = os.environ.get(_BONSAI_EXE_ENV, "").strip()
@@ -98,6 +99,7 @@ class BonsaiCameraRunner:
         self._stopped = threading.Event()
 
     def _build_cmd(self) -> list[str]:
+        """Assemble the Bonsai subprocess command list with all -p property flags."""
         props: dict[str, str] = {
             "basepath": f'"{self._output_dir}"',
             "session": f'"{self._session}"',
@@ -122,6 +124,7 @@ class BonsaiCameraRunner:
         return cmd
 
     def start(self) -> None:
+        """Launch the Bonsai subprocess and begin background monitoring."""
         if self._process is not None and self._process.poll() is None:
             raise RuntimeError("BonsaiCameraRunner is already running.")
 
@@ -148,6 +151,7 @@ class BonsaiCameraRunner:
         )
 
     def _monitor(self) -> None:
+        """Poll the subprocess in a daemon thread and log unexpected exits."""
         assert self._process is not None
         while not self._stopped.is_set():
             rc = self._process.poll()
@@ -188,10 +192,12 @@ class BonsaiCameraRunner:
 
     @property
     def is_running(self) -> bool:
+        """True if the subprocess exists and has not yet exited."""
         return self._process is not None and self._process.poll() is None
 
     @property
     def pid(self) -> int | None:
+        """OS process ID of the Bonsai subprocess, or None if not started."""
         return self._process.pid if self._process else None
 
 
@@ -243,10 +249,12 @@ class MultiCameraRunner:
         return cls(runners)
 
     def start(self) -> None:
+        """Start all camera subprocesses sequentially."""
         for runner in self._runners:
             runner.start()
 
     def stop(self, timeout: float = 5.0) -> None:
+        """Stop all camera subprocesses in parallel and wait for them to exit."""
         threads = []
         for runner in self._runners:
             t = threading.Thread(
@@ -259,10 +267,12 @@ class MultiCameraRunner:
 
     @property
     def all_running(self) -> bool:
+        """True if every camera subprocess is still active."""
         return all(r.is_running for r in self._runners)
 
     @property
     def any_running(self) -> bool:
+        """True if at least one camera subprocess is still active."""
         return any(r.is_running for r in self._runners)
 
     def __len__(self) -> int:

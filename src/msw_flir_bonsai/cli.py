@@ -85,6 +85,7 @@ def list_cameras(
 
 
 def _list_flycap() -> None:
+    """Print connected FlyCapture2 cameras using PyCapture2."""
     try:
         import PyCapture2
     except ImportError as e:
@@ -111,6 +112,7 @@ def _list_flycap() -> None:
 
 
 def _list_spinnaker() -> None:
+    """Print connected Spinnaker cameras using PySpin."""
     try:
         import PySpin
     except ImportError as e:
@@ -269,6 +271,7 @@ def test_record(
 
 
 def main() -> None:
+    """Entry point for the ``msw-flir`` console script."""
     app()
 
 
@@ -282,6 +285,7 @@ def main() -> None:
 
 
 def _dispatch_flir(args: dict) -> None:
+    """Forward remaining CLI args to the Typer app when invoked via ``msw flir``."""
     import sys
 
     flir_args: list[str] = args.get("flir_args", []) or ["--help"]

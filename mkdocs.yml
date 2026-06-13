@@ -39,7 +39,9 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Usage:
+  - Getting started: getting_started.md
+  - Usage: usage.md
+  - Detailed usage:
       - CLI reference: usage/cli.md
       - Python API: usage/python.md
       - Bonsai workflows: usage/workflows.md
