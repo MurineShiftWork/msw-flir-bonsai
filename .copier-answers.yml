@@ -7,6 +7,7 @@ github_repo: msw-flir-bonsai
 github_username: larsrollik
 license_type: noncommercial
 private_repo_deps: false
+test_on_windows: true
 project_description: FLIR camera control via Bonsai for murine shift work experiments
 project_name: msw-flir-bonsai
 project_slug: msw_flir_bonsai
