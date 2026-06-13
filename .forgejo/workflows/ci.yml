@@ -2,8 +2,8 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
-    tags-ignore: ["v*"]   # tag pushes are handled by release.yml
+    branches: [main]
+    tags-ignore: ["v*"]
   pull_request:
     branches: [main]
 
@@ -16,13 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # needed for hatch-vcs version derivation
+          fetch-depth: 0
 
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.10"
+
 
       - name: Install dependencies
         run: uv sync --extra dev
@@ -40,10 +41,11 @@ jobs:
 
         os: [ubuntu-latest, windows-latest]
 
+
         python-version: ["3.10", "3.13"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -51,12 +53,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+
       - name: Install dependencies
         run: uv sync --extra dev
 
       - name: Run tests
         run: uv run pytest
 
+  # Aggregate gate — add as required status check in branch protection
   ci:
     name: CI
     runs-on: ubuntu-latest
@@ -65,6 +69,7 @@ jobs:
     steps:
       - name: Check required jobs
         run: |
+
           if [[ "${{ needs.lint.result }}" != "success" && "${{ needs.lint.result }}" != "skipped" ]]; then
             echo "lint failed" && exit 1
           fi
