@@ -1,4 +1,4 @@
-"""msw-flir CLI — standalone tool and MSW plugin subcommands.
+"""msw-flir CLI: standalone tool and MSW plugin subcommands.
 
 Standalone usage (after pip install msw_flir_bonsai):
     msw-flir find-bonsai
@@ -139,7 +139,7 @@ def _list_spinnaker() -> None:
 
 
 # ---------------------------------------------------------------------------
-# run  (multi-camera launcher — blocks until Ctrl+C or all processes exit)
+# run  (multi-camera launcher: blocks until Ctrl+C or all processes exit)
 
 
 @app.command()
@@ -204,7 +204,7 @@ def run(
 
 
 # ---------------------------------------------------------------------------
-# test-record  (quick sanity check — one camera, fixed duration)
+# test-record  (quick sanity check: one camera, fixed duration)
 
 
 @app.command("test-record")
@@ -310,7 +310,7 @@ def register(sub_parsers: object) -> None:
 
     p = sub_parsers.add_parser(  # type: ignore[attr-defined]
         "flir",
-        help="FLIR camera tools (msw-flir-bonsai) — run 'msw flir --help'",
+        help="FLIR camera tools (msw-flir-bonsai): run 'msw flir --help'",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("flir_args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)

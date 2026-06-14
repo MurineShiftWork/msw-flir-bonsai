@@ -2,7 +2,7 @@
 
 ## msw_flir_bonsai.runner
 
-Camera subprocess management — launch and stop Bonsai processes.
+Camera subprocess management: launch and stop Bonsai processes.
 
 ::: msw_flir_bonsai.runner.BonsaiCameraRunner
 

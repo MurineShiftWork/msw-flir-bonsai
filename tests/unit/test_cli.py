@@ -1,4 +1,4 @@
-"""Unit tests for msw_flir_bonsai.cli — no Bonsai installation required."""
+"""Unit tests for msw_flir_bonsai.cli: no Bonsai installation required."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ class TestFindBonsai:
 
 
 # ---------------------------------------------------------------------------
-# list-cameras — import-error path (SDK never installed on Linux CI)
+# list-cameras: import-error path (SDK never installed on Linux CI)
 
 
 class TestListCameras:
@@ -60,7 +60,7 @@ class TestListCameras:
 
 
 # ---------------------------------------------------------------------------
-# register() — argparse bridge
+# register(): argparse bridge
 
 
 class TestRegister:
