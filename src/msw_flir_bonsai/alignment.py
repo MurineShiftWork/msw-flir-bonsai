@@ -2,11 +2,11 @@
 
 Two alignment channels are available:
 
-1. **TTL barcodes** — periodic binary barcode pulses recorded both on the camera
+1. **TTL barcodes**: periodic binary barcode pulses recorded both on the camera
    GPIO input and on the Bpod BNC output.  A barcode sequence can be matched even
    when partial (some bits missing) using Hamming-distance matching.
 
-2. **Trial TTL edges** — the sequence task (and others) pulse a BNC line at trial
+2. **Trial TTL edges**: the sequence task (and others) pulse a BNC line at trial
    start/end.  The GPIO state column in the camera CSV captures these edges at
    frame resolution, providing a per-frame trial tag without needing a barcode.
 
@@ -192,7 +192,7 @@ def align_ttl_edges(
 
     if len(candidates_arr) == 0:
         raise ValueError(
-            "No candidate offsets within search range — check GPIO and event times."
+            "No candidate offsets within search range: check GPIO and event times."
         )
 
     # Histogram to find consensus offset

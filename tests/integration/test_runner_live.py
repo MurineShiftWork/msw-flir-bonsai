@@ -1,4 +1,4 @@
-"""Integration tests for BonsaiCameraRunner — require a real Bonsai installation.
+"""Integration tests for BonsaiCameraRunner: require a real Bonsai installation.
 
 These tests launch and stop actual Bonsai subprocesses.  They are skipped
 automatically on machines where BONSAI_EXE is not set in the environment.
@@ -20,7 +20,7 @@ import time
 import pytest
 
 BONSAI_EXE = os.environ.get("BONSAI_EXE", "")
-SKIP_REASON = "BONSAI_EXE not set — skipping live Bonsai tests"
+SKIP_REASON = "BONSAI_EXE not set: skipping live Bonsai tests"
 
 requires_bonsai = pytest.mark.skipif(not BONSAI_EXE, reason=SKIP_REASON)
 
@@ -86,7 +86,7 @@ def test_runner_stop_timeout_kills(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# MultiCameraRunner — two independent subprocesses
+# MultiCameraRunner: two independent subprocesses
 
 
 @requires_bonsai

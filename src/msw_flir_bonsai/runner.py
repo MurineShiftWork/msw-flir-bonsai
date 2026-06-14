@@ -1,4 +1,4 @@
-"""BonsaiCameraRunner — launch and manage one Bonsai camera subprocess per camera.
+"""BonsaiCameraRunner: launch and manage one Bonsai camera subprocess per camera.
 
 Each camera runs in an isolated subprocess; a crash in one does not affect others.
 The Bonsai executable is located via the BONSAI_EXE environment variable or a
@@ -67,7 +67,7 @@ class BonsaiCameraRunner:
             rate should be configured in the SDK GUI (FlyCap2 / Spinnaker) and
             stored in camera non-volatile memory; only pass this for an explicit
             CLI override.
-        driver: ``"flycap"`` or ``"spinnaker"`` — controls which properties are passed.
+        driver: ``"flycap"`` or ``"spinnaker"``: controls which properties are passed.
         extra_props: Additional ``-p key=value`` pairs forwarded to Bonsai CLI.
         startup_timeout: Seconds to wait for the subprocess to start before raising.
     """
@@ -230,7 +230,7 @@ class MultiCameraRunner:
 
         Each camera runs in its own subprocess; ``n_cameras`` processes are spawned
         with consecutive ``cam_index`` values (0, 1, …).  The 1-cam workflow is used
-        so each Bonsai process owns exactly one camera — a crash in one does not
+        so each Bonsai process owns exactly one camera: a crash in one does not
         affect the others.
         """
         resolved_workflow = workflow or f"run-flir-{driver}-1cam"

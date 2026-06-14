@@ -1,6 +1,6 @@
 """Unit tests for BonsaiCameraRunner and MultiCameraRunner.
 
-All subprocess calls are mocked — no Bonsai installation required.
+All subprocess calls are mocked: no Bonsai installation required.
 """
 
 from __future__ import annotations

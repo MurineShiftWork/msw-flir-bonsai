@@ -1,4 +1,4 @@
-"""Unit tests for msw_flir_bonsai.alignment — pure numpy/pandas, no hardware needed."""
+"""Unit tests for msw_flir_bonsai.alignment: pure numpy/pandas, no hardware needed."""
 
 from __future__ import annotations
 

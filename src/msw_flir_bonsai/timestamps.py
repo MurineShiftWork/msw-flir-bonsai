@@ -5,9 +5,9 @@ FlyCapture timestamps use a 128-second cycle counter that rolls over;
 frame counters may also roll over at 16-bit or 32-bit boundaries.
 
 This module provides:
-  - ``unwrap_timestamps``  — remove rollovers from a cyclic timestamp array
-  - ``load_camera_csv``    — load the Bonsai-written CSV into a DataFrame
-  - ``preprocess_camera_csv`` — full pipeline: load → unwrap → compute absolute times
+  - ``unwrap_timestamps`` : remove rollovers from a cyclic timestamp array
+  - ``load_camera_csv``   : load the Bonsai-written CSV into a DataFrame
+  - ``preprocess_camera_csv``: full pipeline: load → unwrap → compute absolute times
 
 The output is a DataFrame with columns:
   ``frame_index`` (int), ``timestamp_raw``, ``timestamp_s`` (float, unwrapped),
