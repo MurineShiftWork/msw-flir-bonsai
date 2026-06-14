@@ -288,6 +288,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../" class="md-nav__link">
         
   
@@ -330,10 +357,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -351,8 +378,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -775,7 +802,7 @@ via <code>msw_flir_bonsai.bonsai_workflows.workflow_path(name)</code>.</p>
 </tbody>
 </table>
 <p><strong>The 1-cam workflows are the standard path.</strong>  <code>MultiCameraRunner.from_config</code>
-always selects the 1-cam variant and launches N independent subprocesses — one
+always selects the 1-cam variant and launches N independent subprocesses: one
 per camera index.  The 2-cam workflows are retained for reference but are not
 used by the Python runner.</p>
 <h2 id="external-properties-bonsai-cli-p-flags">External properties (Bonsai CLI <code>-p</code> flags)<a class="headerlink" href="#external-properties-bonsai-cli-p-flags" title="Permanent link">&para;</a></h2>
@@ -812,7 +839,7 @@ used by the Python runner.</p>
 <td><code>cam1fps</code></td>
 <td>int</td>
 <td><strong>flycap only</strong></td>
-<td>Target frame rate — sets <code>FramesPerSecond</code> on the FlyCapture node</td>
+<td>Target frame rate: sets <code>FramesPerSecond</code> on the FlyCapture node</td>
 </tr>
 <tr>
 <td><code>cam1ts</code></td>
@@ -830,7 +857,7 @@ used by the Python runner.</p>
 </table>
 <div class="admonition note">
 <p class="admonition-title">Spinnaker frame rate</p>
-<p>The Spinnaker workflow has no <code>cam1fps</code> externalized property — the frame rate
+<p>The Spinnaker workflow has no <code>cam1fps</code> externalized property: the frame rate
 is not settable via CLI <code>-p</code>.  Set it directly in the Bonsai workflow XML
 (open in the Bonsai editor, find the SpinnakerCapture node, set <code>AcquisitionFrameRate</code>).</p>
 </div>
@@ -848,7 +875,7 @@ immediately without user interaction:</p>
 </ul>
 <h3 id="keyboard-shortcuts-in-the-workflow">Keyboard shortcuts in the workflow<a class="headerlink" href="#keyboard-shortcuts-in-the-workflow" title="Permanent link">&para;</a></h3>
 <p>The workflow XML references <code>Extensions\key-ctrl-start.bonsai</code> and
-<code>Extensions\key-ctrl-stop.bonsai</code>.  These are Bonsai editor UI bindings —
+<code>Extensions\key-ctrl-stop.bonsai</code>.  These are Bonsai editor UI bindings :
 they are <strong>inactive in <code>--no-editor</code> mode</strong> and can be ignored.</p>
 <h3 id="alternative-control-mechanisms">Alternative control mechanisms<a class="headerlink" href="#alternative-control-mechanisms" title="Permanent link">&para;</a></h3>
 <p>If per-trial start/stop (without relaunching Bonsai) is ever needed:</p>
