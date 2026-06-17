@@ -134,9 +134,8 @@ class BonsaiCameraRunner:
         self._stopped.clear()
         self._process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
         self._monitor_thread = threading.Thread(

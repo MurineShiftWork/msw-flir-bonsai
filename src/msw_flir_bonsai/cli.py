@@ -240,10 +240,11 @@ def test_record(
     from msw_flir_bonsai.runner import BonsaiCameraRunner
 
     resolved_workflow = workflow or f"run-flir-{driver}-1cam"
+    output_dir.mkdir(parents=True, exist_ok=True)
     runner = BonsaiCameraRunner(
         workflow=resolved_workflow,
-        output_dir=output_dir,
-        session=session,
+        acqdir=str(output_dir),
+        cam_basename=session,
         cam_index=cam_index,
         fps=fps,
         driver=driver,
