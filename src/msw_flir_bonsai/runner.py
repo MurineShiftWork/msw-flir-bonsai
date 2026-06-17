@@ -10,10 +10,9 @@ Typical usage::
     runner = BonsaiCameraRunner(
         bonsai_exe=r"C:\\Users\\user\\AppData\\Local\\Bonsai\\Bonsai.exe",
         workflow="run-flir-flycap-1cam",
-        output_dir=r"D:\\DATA\\video",
-        session="mouse001__20260518",
+        acqdir=r"D:\\DATA\\video\\mouse01__dt\\mouse01__dt__video_flir",
+        cam_basename="mouse01__dt__video_flir.mswflir.top.0",
         cam_index=0,
-        fps=60,
         driver="flycap",
     )
     runner.start()
@@ -60,13 +59,14 @@ class BonsaiCameraRunner:
         bonsai_exe: Path to ``Bonsai.exe``. Falls back to ``BONSAI_EXE`` env var.
         workflow: Workflow stem name (without ``.bonsai``),
             e.g. ``"run-flir-flycap-1cam"``.
-        output_dir: Root directory under which session subdirectories are created.
-        session: Session base name used to name output files and folders.
-        cam_index: Camera index passed to the workflow (``cam1idx`` property).
+        acqdir: Full path to the pre-created video_flir acquisition directory.
+        cam_basename: Pre-computed file stem for this camera, e.g.
+            ``"mouse01__dt__video_flir.mswflir.top.0"``.  The workflow appends
+            ``.avi`` / ``.timestamps.csv`` to produce output filenames.
+        cam_index: Camera SDK enumeration index (``cam1idx`` workflow property).
         fps: Target frame rate (FlyCapture only; ignored for Spinnaker).  Frame
-            rate should be configured in the SDK GUI (FlyCap2 / Spinnaker) and
-            stored in camera non-volatile memory; only pass this for an explicit
-            CLI override.
+            rate should be configured in camera non-volatile memory; only pass
+            this for an explicit CLI override.
         driver: ``"flycap"`` or ``"spinnaker"``: controls which properties are passed.
         extra_props: Additional ``-p key=value`` pairs forwarded to Bonsai CLI.
         startup_timeout: Seconds to wait for the subprocess to start before raising.
@@ -75,8 +75,8 @@ class BonsaiCameraRunner:
     def __init__(
         self,
         workflow: str,
-        output_dir: str | Path,
-        session: str,
+        acqdir: str | Path,
+        cam_basename: str,
         cam_index: int = 0,
         fps: int | None = None,
         driver: str = "flycap",
@@ -86,8 +86,8 @@ class BonsaiCameraRunner:
     ) -> None:
         self._bonsai_exe = _find_bonsai_exe(bonsai_exe)
         self._workflow_path = workflow_path(workflow)
-        self._output_dir = str(output_dir)
-        self._session = session
+        self._acqdir = str(acqdir)
+        self._cam_basename = cam_basename
         self._cam_index = cam_index
         self._fps = fps
         self._driver = driver
@@ -101,8 +101,8 @@ class BonsaiCameraRunner:
     def _build_cmd(self) -> list[str]:
         """Assemble the Bonsai subprocess command list with all -p property flags."""
         props: dict[str, str] = {
-            "basepath": f'"{self._output_dir}"',
-            "session": f'"{self._session}"',
+            "acqdir": f'"{self._acqdir}"',
+            "cam_basename": f'"{self._cam_basename}"',
             "cam1idx": str(self._cam_index),
         }
         if self._driver == "flycap":
@@ -218,33 +218,39 @@ class MultiCameraRunner:
     @classmethod
     def from_config(
         cls,
-        n_cameras: int,
+        acqdir: str | Path,
+        cam_basenames: list[str],
         driver: str,
-        output_dir: str | Path,
-        session: str,
         fps: int | None = None,
         bonsai_exe: str | Path | None = None,
         workflow: str = "",
     ) -> MultiCameraRunner:
-        """Build one BonsaiCameraRunner per camera index using the 1-cam workflow.
+        """Build one BonsaiCameraRunner per camera using the 1-cam workflow.
 
-        Each camera runs in its own subprocess; ``n_cameras`` processes are spawned
-        with consecutive ``cam_index`` values (0, 1, …).  The 1-cam workflow is used
-        so each Bonsai process owns exactly one camera: a crash in one does not
+        Each camera runs in its own subprocess.  The 1-cam workflow is used so
+        each Bonsai process owns exactly one camera: a crash in one does not
         affect the others.
+
+        Args:
+            acqdir: Pre-created video_flir acquisition directory.
+            cam_basenames: One pre-computed basename per camera (index order).
+            driver: ``"flycap"`` or ``"spinnaker"``.
+            fps: Optional FlyCapture frame-rate override.
+            bonsai_exe: Path to Bonsai.exe (falls back to BONSAI_EXE env var).
+            workflow: Workflow stem; auto-derived as ``run-flir-{driver}-1cam`` if empty.
         """
         resolved_workflow = workflow or f"run-flir-{driver}-1cam"
         runners = [
             BonsaiCameraRunner(
                 workflow=resolved_workflow,
-                output_dir=output_dir,
-                session=session,
+                acqdir=acqdir,
+                cam_basename=cam_basenames[i],
                 cam_index=i,
                 fps=fps,
                 driver=driver,
                 bonsai_exe=bonsai_exe,
             )
-            for i in range(n_cameras)
+            for i in range(len(cam_basenames))
         ]
         return cls(runners)
 

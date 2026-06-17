@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <WorkflowBuilder Version="2.8.5"
                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                  xmlns:rx="clr-namespace:Bonsai.Reactive;assembly=Bonsai.Core"
@@ -10,19 +10,19 @@
   <Workflow>
     <Nodes>
       <Expression xsi:type="ExternalizedMapping">
-        <Property Name="Value" DisplayName="basepath" />
+        <Property Name="Value" DisplayName="acqdir" />
       </Expression>
       <Expression xsi:type="Combinator">
         <Combinator xsi:type="StringProperty">
-          <Value>'C:\DATA\video'</Value>
+          <Value>'C:\DATA\video\mouse01__dt__video_flir'</Value>
         </Combinator>
       </Expression>
       <Expression xsi:type="ExternalizedMapping">
-        <Property Name="Value" DisplayName="session" />
+        <Property Name="Value" DisplayName="cam_basename" />
       </Expression>
       <Expression xsi:type="Combinator">
         <Combinator xsi:type="StringProperty">
-          <Value>'_test1'</Value>
+          <Value>'mouse01__dt__video_flir.mswflir.cam0'</Value>
         </Combinator>
       </Expression>
       <Expression xsi:type="Combinator">
@@ -31,43 +31,12 @@
       <Expression xsi:type="IncludeWorkflow" Path="Extensions\key-ctrl-stop.bonsai" />
       <Expression xsi:type="ipy:PythonTransform">
         <ipy:Script>import os
-from datetime import datetime
 
 @returns(str)
 def process(value):
-
-  basepath, session = value[0], value[1]
-
-  # apparently windows cmd prompt cannot figure out single vs double quotation
-  session = session.replace("'", "")
-  basepath = basepath.replace("'", "")
-
-  dt = datetime.now().strftime("%Y%m%d_%H%M%S")
-  session_name_dt = "__".join([session, dt])
-
-  # basepath / session dir: c/data/video, seq000, seq000__yyyymmdd_hhmmss
-  acqdir = os.path.join(basepath, session, session_name_dt)
-
-  # Check if the drive exists (e.g., "C:\")
-  drive = os.path.splitdrive(acqdir)[0]
-  if not os.path.exists(drive + os.sep):
-    raise EnvironmentError("Drive does not exist: " + drive)
-
-  # create dir if not exist
-  if not os.path.exists(acqdir):
-    os.makedirs(acqdir)
-
-  if os.path.exists(acqdir):
-    msg = "Acquisition dir exists: " + str(acqdir)
-    print(msg)
-  else:
-    FileNotFoundError("Could not create acq dir")
-
-  # add session base name for files
-  fullpath = os.path.join(acqdir, session_name_dt)
-  print("Session file path: " + str(fullpath))
-
-  return fullpath</ipy:Script>
+  acqdir = value[0].replace("'", "")
+  cam_basename = value[1].replace("'", "")
+  return os.path.join(acqdir, cam_basename)</ipy:Script>
       </Expression>
       <Expression xsi:type="rx:ReplaySubject">
         <Name>subj-filename</Name>
@@ -89,11 +58,56 @@ def process(value):
         <Name>subj-cam1fps</Name>
       </Expression>
       <Expression xsi:type="MemberSelector">
-        <Selector>ChunkData.ExposureEndLineStatusAll,ChunkData.Timestamp,ChunkData.FrameID</Selector>
+        <Selector>Image</Selector>
       </Expression>
-      <Expression xsi:type="ExternalizedMapping">
-        <Property Name="cam1meta.name" />
-        <Property Name="cam1meta.ext" />
+      <Expression xsi:type="GroupWorkflow">
+        <Name>cam1vid</Name>
+        <Workflow>
+          <Nodes>
+            <Expression xsi:type="WorkflowInput">
+              <Name>Source1</Name>
+            </Expression>
+            <Expression xsi:type="SubscribeSubject">
+              <Name>subj-filename</Name>
+            </Expression>
+            <Expression xsi:type="Add">
+              <Operand xsi:type="StringProperty">
+                <Value>.avi</Value>
+              </Operand>
+            </Expression>
+            <Expression xsi:type="PropertyMapping">
+              <PropertyMappings>
+                <Property Name="FileName" />
+              </PropertyMappings>
+            </Expression>
+            <Expression xsi:type="Combinator">
+              <Combinator xsi:type="cv:VideoWriter">
+                <cv:FileName>C:\DATA\video\mouse01__dt__video_flir\mouse01__dt__video_flir.mswflir.cam0.avi</cv:FileName>
+                <cv:Suffix>None</cv:Suffix>
+                <cv:Buffered>false</cv:Buffered>
+                <cv:Overwrite>false</cv:Overwrite>
+                <cv:FourCC>FMP4</cv:FourCC>
+                <cv:FrameRate>60</cv:FrameRate>
+                <cv:FrameSize>
+                  <cv:Width>0</cv:Width>
+                  <cv:Height>0</cv:Height>
+                </cv:FrameSize>
+                <cv:ResizeInterpolation>NearestNeighbor</cv:ResizeInterpolation>
+              </Combinator>
+            </Expression>
+            <Expression xsi:type="WorkflowOutput" />
+          </Nodes>
+          <Edges>
+            <Edge From="0" To="4" Label="Source1" />
+            <Edge From="1" To="2" Label="Source1" />
+            <Edge From="2" To="3" Label="Source1" />
+            <Edge From="3" To="4" Label="Source2" />
+            <Edge From="4" To="5" Label="Source1" />
+          </Edges>
+        </Workflow>
+      </Expression>
+      <Expression xsi:type="MemberSelector">
+        <Selector>ChunkData.ExposureEndLineStatusAll,ChunkData.Timestamp,ChunkData.FrameID</Selector>
       </Expression>
       <Expression xsi:type="GroupWorkflow">
         <Name>cam1metawriter</Name>
@@ -110,28 +124,7 @@ def process(value):
             </Expression>
             <Expression xsi:type="Add">
               <Operand xsi:type="StringProperty">
-                <Value>__</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam1meta.name" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>cam1</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>.</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam1meta.ext" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>csv</Value>
+                <Value>.timestamps.csv</Value>
               </Operand>
             </Expression>
             <Expression xsi:type="PropertyMapping">
@@ -140,7 +133,7 @@ def process(value):
               </PropertyMappings>
             </Expression>
             <Expression xsi:type="io:CsvWriter">
-              <io:FileName>C:\DATA\video\_test1\_test1__20250620_113116\_test1__20250620_113116__cam1.csv</io:FileName>
+              <io:FileName>C:\DATA\video\mouse01__dt__video_flir\mouse01__dt__video_flir.mswflir.cam0.timestamps.csv</io:FileName>
               <io:Append>false</io:Append>
               <io:Overwrite>false</io:Overwrite>
               <io:Suffix>None</io:Suffix>
@@ -149,99 +142,10 @@ def process(value):
           </Nodes>
           <Edges>
             <Edge From="0" To="1" Label="Source1" />
-            <Edge From="0" To="10" Label="Source1" />
+            <Edge From="0" To="5" Label="Source1" />
             <Edge From="2" To="3" Label="Source1" />
-            <Edge From="3" To="5" Label="Source1" />
+            <Edge From="3" To="4" Label="Source1" />
             <Edge From="4" To="5" Label="Source2" />
-            <Edge From="5" To="6" Label="Source1" />
-            <Edge From="6" To="8" Label="Source1" />
-            <Edge From="7" To="8" Label="Source2" />
-            <Edge From="8" To="9" Label="Source1" />
-            <Edge From="9" To="10" Label="Source2" />
-          </Edges>
-        </Workflow>
-      </Expression>
-      <Expression xsi:type="ExternalizedMapping">
-        <Property Name="cam1vid.name" />
-        <Property Name="cam1vid.fps" />
-        <Property Name="cam1vid.ext" />
-      </Expression>
-      <Expression xsi:type="MemberSelector">
-        <Selector>Image</Selector>
-      </Expression>
-      <Expression xsi:type="GroupWorkflow">
-        <Name>cam1vid</Name>
-        <Workflow>
-          <Nodes>
-            <Expression xsi:type="WorkflowInput">
-              <Name>Source1</Name>
-            </Expression>
-            <Expression xsi:type="SubscribeSubject">
-              <Name>subj-filename</Name>
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>__</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam1vid.name" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>cam1</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>.</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam1vid.ext" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>avi</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="PropertyMapping">
-              <PropertyMappings>
-                <Property Name="FileName" />
-              </PropertyMappings>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="FrameRate" DisplayName="cam1vid.fps" />
-            </Expression>
-            <Expression xsi:type="Combinator">
-              <Combinator xsi:type="cv:VideoWriter">
-                <cv:FileName>C:\DATA\video\_test1\_test1__20250620_113116\_test1__20250620_113116__cam1.avi</cv:FileName>
-                <cv:Suffix>None</cv:Suffix>
-                <cv:Buffered>false</cv:Buffered>
-                <cv:Overwrite>false</cv:Overwrite>
-                <cv:FourCC>FMP4</cv:FourCC>
-                <cv:FrameRate>60</cv:FrameRate>
-                <cv:FrameSize>
-                  <cv:Width>0</cv:Width>
-                  <cv:Height>0</cv:Height>
-                </cv:FrameSize>
-                <cv:ResizeInterpolation>NearestNeighbor</cv:ResizeInterpolation>
-              </Combinator>
-            </Expression>
-            <Expression xsi:type="WorkflowOutput" />
-          </Nodes>
-          <Edges>
-            <Edge From="0" To="10" Label="Source1" />
-            <Edge From="1" To="2" Label="Source1" />
-            <Edge From="2" To="4" Label="Source1" />
-            <Edge From="3" To="4" Label="Source2" />
-            <Edge From="4" To="5" Label="Source1" />
-            <Edge From="5" To="7" Label="Source1" />
-            <Edge From="6" To="7" Label="Source2" />
-            <Edge From="7" To="8" Label="Source1" />
-            <Edge From="8" To="10" Label="Source2" />
-            <Edge From="9" To="10" Label="Source3" />
-            <Edge From="10" To="11" Label="Source1" />
           </Edges>
         </Workflow>
       </Expression>
@@ -259,12 +163,10 @@ def process(value):
       <Edge From="10" To="11" Label="Source1" />
       <Edge From="11" To="12" Label="Source1" />
       <Edge From="11" To="14" Label="Source1" />
-      <Edge From="11" To="18" Label="Source1" />
+      <Edge From="11" To="16" Label="Source1" />
       <Edge From="12" To="13" Label="Source1" />
-      <Edge From="14" To="16" Label="Source1" />
-      <Edge From="15" To="16" Label="Source2" />
-      <Edge From="17" To="19" Label="Source1" />
-      <Edge From="18" To="19" Label="Source2" />
+      <Edge From="14" To="15" Label="Source1" />
+      <Edge From="16" To="17" Label="Source1" />
     </Edges>
   </Workflow>
 </WorkflowBuilder>

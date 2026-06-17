@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <WorkflowBuilder Version="2.8.5"
                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                  xmlns:rx="clr-namespace:Bonsai.Reactive;assembly=Bonsai.Core"
@@ -9,20 +9,21 @@
                  xmlns="https://bonsai-rx.org/2018/workflow">
   <Workflow>
     <Nodes>
+      <!-- Cam1 path construction -->
       <Expression xsi:type="ExternalizedMapping">
-        <Property Name="Value" DisplayName="basepath" />
+        <Property Name="Value" DisplayName="acqdir" />
       </Expression>
       <Expression xsi:type="Combinator">
         <Combinator xsi:type="StringProperty">
-          <Value>'D:\DATA\video'</Value>
+          <Value>'D:\DATA\video\mouse01__dt__video_flir'</Value>
         </Combinator>
       </Expression>
       <Expression xsi:type="ExternalizedMapping">
-        <Property Name="Value" DisplayName="session" />
+        <Property Name="Value" DisplayName="cam1_basename" />
       </Expression>
       <Expression xsi:type="Combinator">
         <Combinator xsi:type="StringProperty">
-          <Value>'_test1'</Value>
+          <Value>'mouse01__dt__video_flir.mswflir.cam0'</Value>
         </Combinator>
       </Expression>
       <Expression xsi:type="Combinator">
@@ -31,43 +32,52 @@
       <Expression xsi:type="IncludeWorkflow" Path="Extensions\key-ctrl-stop.bonsai" />
       <Expression xsi:type="ipy:PythonTransform">
         <ipy:Script>import os
-from datetime import datetime
 
 @returns(str)
 def process(value):
-
-  basepath, session = value[0], value[1]
-
-  # apparently windows cmd prompt cannot figure out single vs double quotation
-  session = session.replace("'", "")
-  basepath = basepath.replace("'", "")
-
-  dt = datetime.now().strftime("%Y%m%d_%H%M%S")
-  session_name_dt = "__".join([session, dt])
-
-  # basepath / session dir: c/data/video, seq000, seq000__yyyymmdd_hhmmss
-  acqdir = os.path.join(basepath, session, session_name_dt)
-
-  # check/mkdir
-  print("Checking acqdir:", acqdir)
-  if os.path.exists(acqdir):
-    msg = "Acquisition dir exists: " + str(acqdir)
-    print(msg)
-    raise FileExistsError(msg)
-  else:
-    os.makedirs(acqdir)
-    print("Acquisition dir created: " + str(acqdir))
-
-  # add session base name for files
-  fullpath = os.path.join(acqdir, session_name_dt)
-  print("Session file path: " + str(fullpath))
-
-  return fullpath</ipy:Script>
+  acqdir = value[0].replace("'", "")
+  cam_basename = value[1].replace("'", "")
+  return os.path.join(acqdir, cam_basename)</ipy:Script>
       </Expression>
       <Expression xsi:type="rx:ReplaySubject">
-        <Name>subj-filename</Name>
+        <Name>subj-cam1-filename</Name>
         <rx:BufferSize xsi:nil="true" />
       </Expression>
+      <!-- Cam2 path construction -->
+      <Expression xsi:type="ExternalizedMapping">
+        <Property Name="Value" DisplayName="acqdir" />
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="StringProperty">
+          <Value>'D:\DATA\video\mouse01__dt__video_flir'</Value>
+        </Combinator>
+      </Expression>
+      <Expression xsi:type="ExternalizedMapping">
+        <Property Name="Value" DisplayName="cam2_basename" />
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="StringProperty">
+          <Value>'mouse01__dt__video_flir.mswflir.cam1'</Value>
+        </Combinator>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:Zip" />
+      </Expression>
+      <Expression xsi:type="IncludeWorkflow" Path="Extensions\key-ctrl-stop.bonsai" />
+      <Expression xsi:type="ipy:PythonTransform">
+        <ipy:Script>import os
+
+@returns(str)
+def process(value):
+  acqdir = value[0].replace("'", "")
+  cam_basename = value[1].replace("'", "")
+  return os.path.join(acqdir, cam_basename)</ipy:Script>
+      </Expression>
+      <Expression xsi:type="rx:ReplaySubject">
+        <Name>subj-cam2-filename</Name>
+        <rx:BufferSize xsi:nil="true" />
+      </Expression>
+      <!-- Camera 1 -->
       <Expression xsi:type="ExternalizedMapping">
         <Property Name="FramesPerSecond" DisplayName="cam1fps" />
         <Property Name="Index" DisplayName="cam1idx" />
@@ -94,11 +104,6 @@ def process(value):
       <Expression xsi:type="rx:BehaviorSubject">
         <Name>subj-cam1fps</Name>
       </Expression>
-      <Expression xsi:type="ExternalizedMapping">
-        <Property Name="cam1vid.name" />
-        <Property Name="cam1vid.fps" />
-        <Property Name="cam1vid.ext" />
-      </Expression>
       <Expression xsi:type="MemberSelector">
         <Selector>Image</Selector>
       </Expression>
@@ -110,32 +115,11 @@ def process(value):
               <Name>Source1</Name>
             </Expression>
             <Expression xsi:type="SubscribeSubject">
-              <Name>subj-filename</Name>
+              <Name>subj-cam1-filename</Name>
             </Expression>
             <Expression xsi:type="Add">
               <Operand xsi:type="StringProperty">
-                <Value>__</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam1vid.name" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>cam1</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>.</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam1vid.ext" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>avi</Value>
+                <Value>.avi</Value>
               </Operand>
             </Expression>
             <Expression xsi:type="PropertyMapping">
@@ -143,12 +127,9 @@ def process(value):
                 <Property Name="FileName" />
               </PropertyMappings>
             </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="FrameRate" DisplayName="cam1vid.fps" />
-            </Expression>
             <Expression xsi:type="Combinator">
               <Combinator xsi:type="cv:VideoWriter">
-                <cv:FileName>D:\DATA\video\_test1\_test1__20250620_110313\_test1__20250620_110313__cam1.avi</cv:FileName>
+                <cv:FileName>D:\DATA\video\mouse01__dt__video_flir\mouse01__dt__video_flir.mswflir.cam0.avi</cv:FileName>
                 <cv:Suffix>None</cv:Suffix>
                 <cv:Buffered>false</cv:Buffered>
                 <cv:Overwrite>false</cv:Overwrite>
@@ -164,26 +145,16 @@ def process(value):
             <Expression xsi:type="WorkflowOutput" />
           </Nodes>
           <Edges>
-            <Edge From="0" To="10" Label="Source1" />
+            <Edge From="0" To="4" Label="Source1" />
             <Edge From="1" To="2" Label="Source1" />
-            <Edge From="2" To="4" Label="Source1" />
+            <Edge From="2" To="3" Label="Source1" />
             <Edge From="3" To="4" Label="Source2" />
             <Edge From="4" To="5" Label="Source1" />
-            <Edge From="5" To="7" Label="Source1" />
-            <Edge From="6" To="7" Label="Source2" />
-            <Edge From="7" To="8" Label="Source1" />
-            <Edge From="8" To="10" Label="Source2" />
-            <Edge From="9" To="10" Label="Source3" />
-            <Edge From="10" To="11" Label="Source1" />
           </Edges>
         </Workflow>
       </Expression>
       <Expression xsi:type="MemberSelector">
         <Selector>Metadata.embeddedGPIOPinState,Metadata.embeddedTimeStamp,Metadata.embeddedFrameCounter</Selector>
-      </Expression>
-      <Expression xsi:type="ExternalizedMapping">
-        <Property Name="cam1meta.name" />
-        <Property Name="cam1meta.ext" />
       </Expression>
       <Expression xsi:type="GroupWorkflow">
         <Name>cam1metawriter</Name>
@@ -196,32 +167,11 @@ def process(value):
               <Name>cam1gpio</Name>
             </Expression>
             <Expression xsi:type="SubscribeSubject">
-              <Name>subj-filename</Name>
+              <Name>subj-cam1-filename</Name>
             </Expression>
             <Expression xsi:type="Add">
               <Operand xsi:type="StringProperty">
-                <Value>__</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam1meta.name" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>cam1</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>.</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam1meta.ext" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>csv</Value>
+                <Value>.timestamps.csv</Value>
               </Operand>
             </Expression>
             <Expression xsi:type="PropertyMapping">
@@ -230,7 +180,7 @@ def process(value):
               </PropertyMappings>
             </Expression>
             <Expression xsi:type="io:CsvWriter">
-              <io:FileName>D:\DATA\video\_test1\_test1__20250620_110313\_test1__20250620_110313__cam1.csv</io:FileName>
+              <io:FileName>D:\DATA\video\mouse01__dt__video_flir\mouse01__dt__video_flir.mswflir.cam0.timestamps.csv</io:FileName>
               <io:Append>false</io:Append>
               <io:Overwrite>false</io:Overwrite>
               <io:Suffix>None</io:Suffix>
@@ -239,18 +189,14 @@ def process(value):
           </Nodes>
           <Edges>
             <Edge From="0" To="1" Label="Source1" />
-            <Edge From="0" To="10" Label="Source1" />
+            <Edge From="0" To="5" Label="Source1" />
             <Edge From="2" To="3" Label="Source1" />
-            <Edge From="3" To="5" Label="Source1" />
+            <Edge From="3" To="4" Label="Source1" />
             <Edge From="4" To="5" Label="Source2" />
-            <Edge From="5" To="6" Label="Source1" />
-            <Edge From="6" To="8" Label="Source1" />
-            <Edge From="7" To="8" Label="Source2" />
-            <Edge From="8" To="9" Label="Source1" />
-            <Edge From="9" To="10" Label="Source2" />
           </Edges>
         </Workflow>
       </Expression>
+      <!-- Camera 2 -->
       <Expression xsi:type="ExternalizedMapping">
         <Property Name="FramesPerSecond" DisplayName="cam2fps" />
         <Property Name="Index" DisplayName="cam2idx" />
@@ -277,11 +223,6 @@ def process(value):
       <Expression xsi:type="rx:BehaviorSubject">
         <Name>subj-cam2fps</Name>
       </Expression>
-      <Expression xsi:type="ExternalizedMapping">
-        <Property Name="cam2vid.ext" />
-        <Property Name="cam2vid.name" />
-        <Property Name="cam2vid.fps" />
-      </Expression>
       <Expression xsi:type="MemberSelector">
         <Selector>Image</Selector>
       </Expression>
@@ -293,32 +234,11 @@ def process(value):
               <Name>Source1</Name>
             </Expression>
             <Expression xsi:type="SubscribeSubject">
-              <Name>subj-filename</Name>
+              <Name>subj-cam2-filename</Name>
             </Expression>
             <Expression xsi:type="Add">
               <Operand xsi:type="StringProperty">
-                <Value>__</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam2vid.name" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>cam2</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>.</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam2vid.ext" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>avi</Value>
+                <Value>.avi</Value>
               </Operand>
             </Expression>
             <Expression xsi:type="PropertyMapping">
@@ -326,12 +246,9 @@ def process(value):
                 <Property Name="FileName" />
               </PropertyMappings>
             </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="FrameRate" DisplayName="cam2vid.fps" />
-            </Expression>
             <Expression xsi:type="Combinator">
               <Combinator xsi:type="cv:VideoWriter">
-                <cv:FileName>D:\DATA\video\_test1\_test1__20250620_110313\_test1__20250620_110313__cam2.avi</cv:FileName>
+                <cv:FileName>D:\DATA\video\mouse01__dt__video_flir\mouse01__dt__video_flir.mswflir.cam1.avi</cv:FileName>
                 <cv:Suffix>None</cv:Suffix>
                 <cv:Buffered>false</cv:Buffered>
                 <cv:Overwrite>false</cv:Overwrite>
@@ -347,26 +264,16 @@ def process(value):
             <Expression xsi:type="WorkflowOutput" />
           </Nodes>
           <Edges>
-            <Edge From="0" To="10" Label="Source1" />
+            <Edge From="0" To="4" Label="Source1" />
             <Edge From="1" To="2" Label="Source1" />
-            <Edge From="2" To="4" Label="Source1" />
+            <Edge From="2" To="3" Label="Source1" />
             <Edge From="3" To="4" Label="Source2" />
             <Edge From="4" To="5" Label="Source1" />
-            <Edge From="5" To="7" Label="Source1" />
-            <Edge From="6" To="7" Label="Source2" />
-            <Edge From="7" To="8" Label="Source1" />
-            <Edge From="8" To="10" Label="Source2" />
-            <Edge From="9" To="10" Label="Source3" />
-            <Edge From="10" To="11" Label="Source1" />
           </Edges>
         </Workflow>
       </Expression>
       <Expression xsi:type="MemberSelector">
         <Selector>Metadata.embeddedGPIOPinState,Metadata.embeddedTimeStamp,Metadata.embeddedFrameCounter</Selector>
-      </Expression>
-      <Expression xsi:type="ExternalizedMapping">
-        <Property Name="cam2meta.name" />
-        <Property Name="cam2meta.ext" />
       </Expression>
       <Expression xsi:type="GroupWorkflow">
         <Name>cam2metawriter</Name>
@@ -379,32 +286,11 @@ def process(value):
               <Name>cam2gpio</Name>
             </Expression>
             <Expression xsi:type="SubscribeSubject">
-              <Name>subj-filename</Name>
+              <Name>subj-cam2-filename</Name>
             </Expression>
             <Expression xsi:type="Add">
               <Operand xsi:type="StringProperty">
-                <Value>__</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam2meta.name" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>cam2</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>.</Value>
-              </Operand>
-            </Expression>
-            <Expression xsi:type="ExternalizedMapping">
-              <Property Name="Value" DisplayName="cam2meta.ext" />
-            </Expression>
-            <Expression xsi:type="Add">
-              <Operand xsi:type="StringProperty">
-                <Value>csv</Value>
+                <Value>.timestamps.csv</Value>
               </Operand>
             </Expression>
             <Expression xsi:type="PropertyMapping">
@@ -413,7 +299,7 @@ def process(value):
               </PropertyMappings>
             </Expression>
             <Expression xsi:type="io:CsvWriter">
-              <io:FileName>D:\DATA\video\_test1\_test1__20250620_110313\_test1__20250620_110313__cam2.csv</io:FileName>
+              <io:FileName>D:\DATA\video\mouse01__dt__video_flir\mouse01__dt__video_flir.mswflir.cam1.timestamps.csv</io:FileName>
               <io:Append>false</io:Append>
               <io:Overwrite>false</io:Overwrite>
               <io:Suffix>None</io:Suffix>
@@ -422,20 +308,16 @@ def process(value):
           </Nodes>
           <Edges>
             <Edge From="0" To="1" Label="Source1" />
-            <Edge From="0" To="10" Label="Source1" />
+            <Edge From="0" To="5" Label="Source1" />
             <Edge From="2" To="3" Label="Source1" />
-            <Edge From="3" To="5" Label="Source1" />
+            <Edge From="3" To="4" Label="Source1" />
             <Edge From="4" To="5" Label="Source2" />
-            <Edge From="5" To="6" Label="Source1" />
-            <Edge From="6" To="8" Label="Source1" />
-            <Edge From="7" To="8" Label="Source2" />
-            <Edge From="8" To="9" Label="Source1" />
-            <Edge From="9" To="10" Label="Source2" />
           </Edges>
         </Workflow>
       </Expression>
     </Nodes>
     <Edges>
+      <!-- Cam1 path construction -->
       <Edge From="0" To="1" Label="Source1" />
       <Edge From="1" To="4" Label="Source1" />
       <Edge From="2" To="3" Label="Source1" />
@@ -443,28 +325,34 @@ def process(value):
       <Edge From="4" To="5" Label="Source1" />
       <Edge From="5" To="6" Label="Source1" />
       <Edge From="6" To="7" Label="Source1" />
+      <!-- Cam2 path construction -->
       <Edge From="8" To="9" Label="Source1" />
-      <Edge From="9" To="10" Label="Source1" />
+      <Edge From="9" To="12" Label="Source1" />
       <Edge From="10" To="11" Label="Source1" />
-      <Edge From="11" To="12" Label="Source1" />
-      <Edge From="11" To="15" Label="Source1" />
-      <Edge From="11" To="17" Label="Source1" />
+      <Edge From="11" To="12" Label="Source2" />
       <Edge From="12" To="13" Label="Source1" />
-      <Edge From="14" To="16" Label="Source1" />
-      <Edge From="15" To="16" Label="Source2" />
-      <Edge From="17" To="19" Label="Source1" />
-      <Edge From="18" To="19" Label="Source2" />
+      <Edge From="13" To="14" Label="Source1" />
+      <Edge From="14" To="15" Label="Source1" />
+      <!-- Camera 1 hardware + recording -->
+      <Edge From="16" To="17" Label="Source1" />
+      <Edge From="17" To="18" Label="Source1" />
+      <Edge From="18" To="19" Label="Source1" />
+      <Edge From="19" To="20" Label="Source1" />
+      <Edge From="19" To="22" Label="Source1" />
+      <Edge From="19" To="24" Label="Source1" />
       <Edge From="20" To="21" Label="Source1" />
-      <Edge From="21" To="22" Label="Source1" />
       <Edge From="22" To="23" Label="Source1" />
-      <Edge From="23" To="24" Label="Source1" />
-      <Edge From="23" To="27" Label="Source1" />
-      <Edge From="23" To="29" Label="Source1" />
       <Edge From="24" To="25" Label="Source1" />
-      <Edge From="26" To="28" Label="Source1" />
-      <Edge From="27" To="28" Label="Source2" />
-      <Edge From="29" To="31" Label="Source1" />
-      <Edge From="30" To="31" Label="Source2" />
+      <!-- Camera 2 hardware + recording -->
+      <Edge From="26" To="27" Label="Source1" />
+      <Edge From="27" To="28" Label="Source1" />
+      <Edge From="28" To="29" Label="Source1" />
+      <Edge From="29" To="30" Label="Source1" />
+      <Edge From="29" To="32" Label="Source1" />
+      <Edge From="29" To="34" Label="Source1" />
+      <Edge From="30" To="31" Label="Source1" />
+      <Edge From="32" To="33" Label="Source1" />
+      <Edge From="34" To="35" Label="Source1" />
     </Edges>
   </Workflow>
 </WorkflowBuilder>
