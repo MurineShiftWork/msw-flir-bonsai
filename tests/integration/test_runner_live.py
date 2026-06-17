@@ -35,8 +35,8 @@ def _default_runner(
 
     return BonsaiCameraRunner(
         workflow=f"run-flir-{driver}-1cam",
-        output_dir=str(tmp_path),
-        session="live_test",
+        acqdir=str(tmp_path),
+        cam_basename=f"live_test.cam{cam_index}",
         cam_index=cam_index,
         fps=fps,
         driver=driver,
@@ -95,10 +95,9 @@ def test_multi_runner_two_cameras(tmp_path) -> None:
     from msw_flir_bonsai.runner import MultiCameraRunner
 
     multi = MultiCameraRunner.from_config(
-        n_cameras=2,
+        acqdir=str(tmp_path),
+        cam_basenames=["multi_test.cam0", "multi_test.cam1"],
         driver=os.environ.get("FLIR_DRIVER", "flycap"),
-        output_dir=str(tmp_path),
-        session="multi_test",
         fps=30,
         bonsai_exe=BONSAI_EXE,
     )

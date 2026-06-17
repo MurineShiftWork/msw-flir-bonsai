@@ -20,11 +20,14 @@ from msw_flir_bonsai.runner import (
 # ---------------------------------------------------------------------------
 # Helpers
 
+_ACQDIR = "D:/DATA/video/mouse01__dt__video_flir"
+_CAM_BASENAME = "mouse01__dt__video_flir.mswflir.cam0"
+
 
 def _make_runner(
     workflow: str = "run-flir-flycap-1cam",
-    output_dir: str = "D:/DATA/video",
-    session: str = "test",
+    acqdir: str = _ACQDIR,
+    cam_basename: str = _CAM_BASENAME,
     cam_index: int = 0,
     fps: int | None = None,
     driver: str = "flycap",
@@ -32,8 +35,8 @@ def _make_runner(
 ) -> BonsaiCameraRunner:
     return BonsaiCameraRunner(
         workflow=workflow,
-        output_dir=output_dir,
-        session=session,
+        acqdir=acqdir,
+        cam_basename=cam_basename,
         cam_index=cam_index,
         fps=fps,
         driver=driver,
@@ -81,18 +84,27 @@ class TestBuildCmd:
         assert "--start" in cmd
         assert "--no-editor" in cmd
 
-    def test_basepath_and_session_quoted(self) -> None:
-        runner = _make_runner(output_dir="D:/DATA/video", session="mouse001")
+    def test_acqdir_and_cam_basename_quoted(self) -> None:
+        runner = _make_runner(acqdir=_ACQDIR, cam_basename=_CAM_BASENAME)
         cmd = runner._build_cmd()
         joined = " ".join(cmd)
-        assert '"D:/DATA/video"' in joined
-        assert '"mouse001"' in joined
+        assert f'"{_ACQDIR}"' in joined
+        assert f'"{_CAM_BASENAME}"' in joined
+
+    def test_acqdir_and_cam_basename_prop_names(self) -> None:
+        runner = _make_runner()
+        cmd = runner._build_cmd()
+        joined = " ".join(cmd)
+        assert "acqdir=" in joined
+        assert "cam_basename=" in joined
+        assert "basepath=" not in joined
+        assert "session=" not in joined
 
     def test_extra_props_forwarded(self) -> None:
         runner = BonsaiCameraRunner(
             workflow="run-flir-flycap-1cam",
-            output_dir="D:/DATA",
-            session="s1",
+            acqdir=_ACQDIR,
+            cam_basename=_CAM_BASENAME,
             bonsai_exe="C:/Bonsai.exe",
             extra_props={"mykey": "myval"},
         )
@@ -231,55 +243,64 @@ class TestFindBonsaiExe:
 class TestFromConfig:
     def test_always_uses_1cam_workflow(self) -> None:
         multi = MultiCameraRunner.from_config(
-            n_cameras=3,
+            acqdir=_ACQDIR,
+            cam_basenames=[_CAM_BASENAME, _CAM_BASENAME.replace("cam0", "cam1")],
             driver="flycap",
-            output_dir="D:/DATA",
-            session="s",
             bonsai_exe="C:/Bonsai.exe",
         )
         for runner in multi._runners:
             assert "1cam" in runner._workflow_path.name
 
     def test_consecutive_cam_indices(self) -> None:
+        basenames = [f"stem.mswflir.cam{i}" for i in range(3)]
         multi = MultiCameraRunner.from_config(
-            n_cameras=3,
+            acqdir=_ACQDIR,
+            cam_basenames=basenames,
             driver="flycap",
-            output_dir="D:/DATA",
-            session="s",
             bonsai_exe="C:/Bonsai.exe",
         )
         indices = [r._cam_index for r in multi._runners]
         assert indices == [0, 1, 2]
 
+    def test_cam_basenames_stored(self) -> None:
+        basenames = ["stem.mswflir.top.0", "stem.mswflir.front.1"]
+        multi = MultiCameraRunner.from_config(
+            acqdir=_ACQDIR,
+            cam_basenames=basenames,
+            driver="flycap",
+            bonsai_exe="C:/Bonsai.exe",
+        )
+        stored = [r._cam_basename for r in multi._runners]
+        assert stored == basenames
+
     def test_workflow_override(self) -> None:
         multi = MultiCameraRunner.from_config(
-            n_cameras=1,
+            acqdir=_ACQDIR,
+            cam_basenames=[_CAM_BASENAME],
             driver="flycap",
-            output_dir="D:/DATA",
-            session="s",
             bonsai_exe="C:/Bonsai.exe",
             workflow="run-flir-flycap-1cam",
         )
         assert "flycap" in multi._runners[0]._workflow_path.name
 
     def test_spinnaker_workflow_name(self) -> None:
+        basenames = [f"stem.mswflir.cam{i}" for i in range(2)]
         multi = MultiCameraRunner.from_config(
-            n_cameras=2,
+            acqdir=_ACQDIR,
+            cam_basenames=basenames,
             driver="spinnaker",
-            output_dir="D:/DATA",
-            session="s",
             bonsai_exe="C:/Bonsai.exe",
         )
         for runner in multi._runners:
             assert "spinnaker" in runner._workflow_path.name
 
-    def test_n_runners_matches_n_cameras(self) -> None:
+    def test_n_runners_matches_n_basenames(self) -> None:
         for n in (1, 2, 4):
+            basenames = [f"stem.mswflir.cam{i}" for i in range(n)]
             multi = MultiCameraRunner.from_config(
-                n_cameras=n,
+                acqdir=_ACQDIR,
+                cam_basenames=basenames,
                 driver="flycap",
-                output_dir="D:/DATA",
-                session="s",
                 bonsai_exe="C:/Bonsai.exe",
             )
             assert len(multi) == n

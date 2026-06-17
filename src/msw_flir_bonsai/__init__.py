@@ -19,3 +19,5 @@ try:
     __version__ = version("msw_flir_bonsai")
 except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
+
+MSWFLIR_PREFIX = "mswflir"  # artifact separator used in all FLIR video filenames
