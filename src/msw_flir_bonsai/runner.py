@@ -236,7 +236,8 @@ class MultiCameraRunner:
             driver: ``"flycap"`` or ``"spinnaker"``.
             fps: Optional FlyCapture frame-rate override.
             bonsai_exe: Path to Bonsai.exe (falls back to BONSAI_EXE env var).
-            workflow: Workflow stem; auto-derived as ``run-flir-{driver}-1cam`` if empty.
+            workflow: Workflow stem; auto-derived as ``run-flir-{driver}-1cam``
+                if empty.
         """
         resolved_workflow = workflow or f"run-flir-{driver}-1cam"
         runners = [

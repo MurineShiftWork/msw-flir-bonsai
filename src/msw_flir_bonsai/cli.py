@@ -178,11 +178,13 @@ def run(
     """
     from msw_flir_bonsai.runner import MultiCameraRunner
 
+    acqdir = output_dir / session
+    acqdir.mkdir(parents=True, exist_ok=True)
+    cam_basenames = [f"{session}.cam{i}" for i in range(n_cameras)]
     runner = MultiCameraRunner.from_config(
-        n_cameras=n_cameras,
+        acqdir=str(acqdir),
+        cam_basenames=cam_basenames,
         driver=driver,
-        output_dir=output_dir,
-        session=session,
         fps=fps,
         bonsai_exe=str(bonsai_exe) if bonsai_exe else None,
         workflow=workflow,
