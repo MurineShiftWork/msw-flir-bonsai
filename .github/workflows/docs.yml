@@ -12,12 +12,15 @@ on:
 permissions:
   contents: write   # needed for gh-deploy to push to gh-pages branch
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     name: Deploy docs to GitHub Pages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0   # full history for git-revision-date plugin (if added later)
 
