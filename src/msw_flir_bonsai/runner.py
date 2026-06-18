@@ -178,7 +178,7 @@ class BonsaiCameraRunner:
                     f"[BonsaiCamera cam{self._cam_index}] Terminate timed out; killing"
                 )
                 self._process.kill()
-                self._process.wait()
+                self._process.wait(timeout=5.0)
 
     def wait(self, timeout: float | None = None) -> int | None:
         """Block until the subprocess exits. Returns the return code."""
@@ -283,3 +283,6 @@ class MultiCameraRunner:
 
     def __len__(self) -> int:
         return len(self._runners)
+
+    def __iter__(self):
+        return iter(self._runners)

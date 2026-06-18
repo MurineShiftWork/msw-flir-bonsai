@@ -106,7 +106,7 @@ def test_multi_runner_two_cameras(tmp_path) -> None:
     time.sleep(3)
     multi.stop()
     # allow both processes to exit
-    for runner in multi._runners:
+    for runner in multi:
         runner.wait(timeout=15)
     assert not multi.any_running
 
