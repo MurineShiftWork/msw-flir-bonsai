@@ -26,4 +26,4 @@ Breaking changes: add `!` after the type or a `BREAKING CHANGE:` footer.
 
 ## Questions
 
-Open an issue or email L.B.Rollik@protonmail.com.
+Open an issue or email lars@rollik.me.
