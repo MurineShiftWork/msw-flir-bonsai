@@ -8,6 +8,7 @@ Sub-modules:
     runner     -- BonsaiCameraRunner and MultiCameraRunner subprocess management
     timestamps -- CSV loading, timestamp unwrapping, dropped-frame detection
     alignment  -- barcode and TTL-edge alignment to Bpod clocks
+    readers    -- load_session: per-camera completeness of a video_flir acq dir
     cli        -- msw-flir command-line interface (Typer/argparse)
 """
 
@@ -19,5 +20,3 @@ try:
     __version__ = version("msw_flir_bonsai")
 except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
-
-MSWFLIR_PREFIX = "mswflir"  # artifact separator used in all FLIR video filenames
