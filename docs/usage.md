@@ -5,6 +5,31 @@ For installation and first-run verification, see [Getting started](getting_start
 
 ---
 
+## Recording as part of an MSW session
+
+The usual path: instead of driving the runner yourself, declare the camera in
+the rig's setup YAML under `cameras:` and run any camera-aware MSW task. MSW then
+launches Bonsai and records a `video_flir` acquisition (one `.avi` +
+`.timestamps.csv` per camera) alongside the behavioural data.
+
+One FlyCapture camera on a setup:
+
+```yaml
+cameras:
+  backend: flir_bonsai
+  driver: flycap                  # default
+  bonsai_exe: C:\...\Bonsai.exe   # or set the BONSAI_EXE env var
+  cameras:
+    - index: 0                    # from `msw flir list-cameras`
+      name: top                   # optional label; appears in the artifact name
+```
+
+The full key reference and the per-backend bring-up checklist live in the main
+MSW docs (Setup config -> Cameras). The rest of this page covers driving the
+runner directly, which the MSW path does for you.
+
+---
+
 ## Running cameras
 
 ### Single camera
