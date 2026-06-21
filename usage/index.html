@@ -375,6 +375,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#recording-as-part-of-an-msw-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recording as part of an MSW session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#running-cameras" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -718,6 +729,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#recording-as-part-of-an-msw-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recording as part of an MSW session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#running-cameras" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -880,67 +902,85 @@
 <p>Common patterns for running cameras, preprocessing data, and aligning timestamps.
 For installation and first-run verification, see <a href="../getting_started/">Getting started</a>.</p>
 <hr />
+<h2 id="recording-as-part-of-an-msw-session">Recording as part of an MSW session<a class="headerlink" href="#recording-as-part-of-an-msw-session" title="Permanent link">&para;</a></h2>
+<p>The usual path: instead of driving the runner yourself, declare the camera in
+the rig's setup YAML under <code>cameras:</code> and run any camera-aware MSW task. MSW then
+launches Bonsai and records a <code>video_flir</code> acquisition (one <code>.avi</code> +
+<code>.timestamps.csv</code> per camera) alongside the behavioural data.</p>
+<p>One FlyCapture camera on a setup:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">cameras</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">backend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">flir_bonsai</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">driver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">flycap</span><span class="w">                  </span><span class="c1"># default</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">bonsai_exe</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C:\...\Bonsai.exe</span><span class="w">   </span><span class="c1"># or set the BONSAI_EXE env var</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">cameras</span><span class="p">:</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">                    </span><span class="c1"># from `msw flir list-cameras`</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">top</span><span class="w">                   </span><span class="c1"># optional label; appears in the artifact name</span>
+</code></pre></div>
+<p>The full key reference and the per-backend bring-up checklist live in the main
+MSW docs (Setup config -&gt; Cameras). The rest of this page covers driving the
+runner directly, which the MSW path does for you.</p>
+<hr />
 <h2 id="running-cameras">Running cameras<a class="headerlink" href="#running-cameras" title="Permanent link">&para;</a></h2>
 <h3 id="single-camera">Single camera<a class="headerlink" href="#single-camera" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">BonsaiCameraRunner</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">BonsaiCameraRunner</span><span class="p">(</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">workflow</span><span class="o">=</span><span class="s2">&quot;run-flir-flycap-1cam&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;D:\DATA\video&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">session</span><span class="o">=</span><span class="s2">&quot;mouse001__20260524&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">cam_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">fps</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">driver</span><span class="o">=</span><span class="s2">&quot;flycap&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">runner</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># ... behavioural task runs ...</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">runner</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">BonsaiCameraRunner</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">BonsaiCameraRunner</span><span class="p">(</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">workflow</span><span class="o">=</span><span class="s2">&quot;run-flir-flycap-1cam&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;D:\DATA\video&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">session</span><span class="o">=</span><span class="s2">&quot;mouse001__20260524&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">cam_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">fps</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">driver</span><span class="o">=</span><span class="s2">&quot;flycap&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">runner</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># ... behavioural task runs ...</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">runner</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
 </code></pre></div>
 <p><code>bonsai_exe</code> is optional when <code>BONSAI_EXE</code> is set in the environment.</p>
 <h3 id="multiple-cameras">Multiple cameras<a class="headerlink" href="#multiple-cameras" title="Permanent link">&para;</a></h3>
 <p>Each camera runs in its own subprocess.  A crash in one does not affect the
 others.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultiCameraRunner</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">multi</span> <span class="o">=</span> <span class="n">MultiCameraRunner</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">n_cameras</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">driver</span><span class="o">=</span><span class="s2">&quot;flycap&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;D:\DATA\video&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">session</span><span class="o">=</span><span class="s2">&quot;mouse001__20260524&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">fps</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">)</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">multi</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Poll until all processes exit (or add your own condition)</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="k">while</span> <span class="n">multi</span><span class="o">.</span><span class="n">any_running</span><span class="p">:</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="n">multi</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultiCameraRunner</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">multi</span> <span class="o">=</span> <span class="n">MultiCameraRunner</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">n_cameras</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">driver</span><span class="o">=</span><span class="s2">&quot;flycap&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;D:\DATA\video&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">session</span><span class="o">=</span><span class="s2">&quot;mouse001__20260524&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">fps</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">multi</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># Poll until all processes exit (or add your own condition)</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="k">while</span> <span class="n">multi</span><span class="o">.</span><span class="n">any_running</span><span class="p">:</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">multi</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
 </code></pre></div>
 <p><code>from_config</code> spawns one process per camera index (0, 1, ...) using the 1-cam
 workflow.  The 2-cam workflow variants are legacy and not used here.</p>
 <h3 id="monitoring-subprocess-health">Monitoring subprocess health<a class="headerlink" href="#monitoring-subprocess-health" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">print</span><span class="p">(</span><span class="n">runner</span><span class="o">.</span><span class="n">is_running</span><span class="p">)</span>   <span class="c1"># False after crash or stop</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">runner</span><span class="o">.</span><span class="n">pid</span><span class="p">)</span>          <span class="c1"># OS process ID while running</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">multi</span><span class="o">.</span><span class="n">all_running</span><span class="p">)</span>   <span class="c1"># True if every camera is still active</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">multi</span><span class="o">.</span><span class="n">any_running</span><span class="p">)</span>   <span class="c1"># True if at least one is active</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nb">print</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">multi</span><span class="p">))</span>          <span class="c1"># number of runners</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">print</span><span class="p">(</span><span class="n">runner</span><span class="o">.</span><span class="n">is_running</span><span class="p">)</span>   <span class="c1"># False after crash or stop</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">runner</span><span class="o">.</span><span class="n">pid</span><span class="p">)</span>          <span class="c1"># OS process ID while running</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">multi</span><span class="o">.</span><span class="n">all_running</span><span class="p">)</span>   <span class="c1"># True if every camera is still active</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">multi</span><span class="o">.</span><span class="n">any_running</span><span class="p">)</span>   <span class="c1"># True if at least one is active</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">print</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">multi</span><span class="p">))</span>          <span class="c1"># number of runners</span>
 </code></pre></div>
 <h3 id="spinnaker-cameras">Spinnaker cameras<a class="headerlink" href="#spinnaker-cameras" title="Permanent link">&para;</a></h3>
 <p>Switch <code>driver</code> and <code>workflow</code>; everything else is the same.  Do not pass <code>fps</code>
 for Spinnaker - set the frame rate directly in the workflow XML.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">BonsaiCameraRunner</span><span class="p">(</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">workflow</span><span class="o">=</span><span class="s2">&quot;run-flir-spinnaker-1cam&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;D:\DATA\video&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">session</span><span class="o">=</span><span class="s2">&quot;mouse001__20260524&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">cam_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">driver</span><span class="o">=</span><span class="s2">&quot;spinnaker&quot;</span><span class="p">,</span>      <span class="c1"># fps not applicable here</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">runner</span> <span class="o">=</span> <span class="n">BonsaiCameraRunner</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">workflow</span><span class="o">=</span><span class="s2">&quot;run-flir-spinnaker-1cam&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">output_dir</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;D:\DATA\video&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">session</span><span class="o">=</span><span class="s2">&quot;mouse001__20260524&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">cam_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">driver</span><span class="o">=</span><span class="s2">&quot;spinnaker&quot;</span><span class="p">,</span>      <span class="c1"># fps not applicable here</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="preprocessing-camera-timestamps">Preprocessing camera timestamps<a class="headerlink" href="#preprocessing-camera-timestamps" title="Permanent link">&para;</a></h2>
@@ -948,29 +988,29 @@ for Spinnaker - set the frame rate directly in the workflow XML.</p>
 <code>frame_counter</code>, <code>timestamp_raw</code>, <code>gpio_state</code> (optional).</p>
 <p>FlyCapture timestamps are cyclic (128 s period) and may contain frame-counter
 rollovers.  <code>preprocess_camera_csv</code> corrects both.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.timestamps</span><span class="w"> </span><span class="kn">import</span> <span class="n">preprocess_camera_csv</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">df</span> <span class="o">=</span> <span class="n">preprocess_camera_csv</span><span class="p">(</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="s2">&quot;cam0__20260524_120000.csv&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">ts_cycle_s</span><span class="o">=</span><span class="mf">128.0</span><span class="p">,</span>    <span class="c1"># FlyCapture rollover period; use np.inf for Spinnaker</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">counter_bits</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">)</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Columns: frame_index, timestamp_raw, timestamp_s, frame_counter, [gpio_state]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.timestamps</span><span class="w"> </span><span class="kn">import</span> <span class="n">preprocess_camera_csv</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">df</span> <span class="o">=</span> <span class="n">preprocess_camera_csv</span><span class="p">(</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="s2">&quot;cam0__20260524_120000.csv&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">ts_cycle_s</span><span class="o">=</span><span class="mf">128.0</span><span class="p">,</span>    <span class="c1"># FlyCapture rollover period; use np.inf for Spinnaker</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">counter_bits</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">)</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Columns: frame_index, timestamp_raw, timestamp_s, frame_counter, [gpio_state]</span>
 </code></pre></div>
 <p>To zero timestamps relative to the first behavioural event:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">preprocess_camera_csv</span><span class="p">(</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">&quot;cam0.csv&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">session_start_s</span><span class="o">=</span><span class="n">bpod_session_start_time</span><span class="p">,</span>  <span class="c1"># subtract this from all timestamps</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">preprocess_camera_csv</span><span class="p">(</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">&quot;cam0.csv&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">session_start_s</span><span class="o">=</span><span class="n">bpod_session_start_time</span><span class="p">,</span>  <span class="c1"># subtract this from all timestamps</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">)</span>
 </code></pre></div>
 <h3 id="detecting-dropped-frames">Detecting dropped frames<a class="headerlink" href="#detecting-dropped-frames" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.timestamps</span><span class="w"> </span><span class="kn">import</span> <span class="n">detect_dropped_frames</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">dropped</span> <span class="o">=</span> <span class="n">detect_dropped_frames</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">expected_fps</span><span class="o">=</span><span class="mf">60.0</span><span class="p">)</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dropped</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">}</span><span class="s2"> dropped frames detected&quot;</span><span class="p">)</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># View the frames where drops occurred</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">dropped</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;frame_index&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp_s&quot;</span><span class="p">]])</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.timestamps</span><span class="w"> </span><span class="kn">import</span> <span class="n">detect_dropped_frames</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">dropped</span> <span class="o">=</span> <span class="n">detect_dropped_frames</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">expected_fps</span><span class="o">=</span><span class="mf">60.0</span><span class="p">)</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dropped</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">}</span><span class="s2"> dropped frames detected&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># View the frames where drops occurred</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">dropped</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;frame_index&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp_s&quot;</span><span class="p">]])</span>
 </code></pre></div>
 <p><code>detect_dropped_frames</code> flags any inter-frame gap larger than 1.5 times the
 nominal inter-frame interval.</p>
@@ -980,21 +1020,21 @@ nominal inter-frame interval.</p>
 <h3 id="barcode-alignment-preferred">Barcode alignment (preferred)<a class="headerlink" href="#barcode-alignment-preferred" title="Permanent link">&para;</a></h3>
 <p>Use this when both the camera GPIO and Bpod BNC recorded the same periodic
 barcode pulses.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.alignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_camera_barcodes</span><span class="p">,</span> <span class="n">align_barcodes</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Extract barcodes from the camera GPIO column</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">cam_barcodes</span> <span class="o">=</span> <span class="n">extract_camera_barcodes</span><span class="p">(</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">df</span><span class="p">,</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">gpio_col</span><span class="o">=</span><span class="s2">&quot;gpio_state&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">fps</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">barcode_bit_duration_s</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="p">)</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># bpod_barcodes: list of (time_s, barcode_int) decoded from Bpod events</span>
-<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">offset_s</span> <span class="o">=</span> <span class="n">align_barcodes</span><span class="p">(</span><span class="n">bpod_barcodes</span><span class="p">,</span> <span class="n">cam_barcodes</span><span class="p">,</span> <span class="n">max_hamming</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
-<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># Apply the offset</span>
-<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="n">df</span><span class="p">[</span><span class="s2">&quot;bpod_time&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">&quot;timestamp_s&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset_s</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.alignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_camera_barcodes</span><span class="p">,</span> <span class="n">align_barcodes</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Extract barcodes from the camera GPIO column</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">cam_barcodes</span> <span class="o">=</span> <span class="n">extract_camera_barcodes</span><span class="p">(</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">df</span><span class="p">,</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">gpio_col</span><span class="o">=</span><span class="s2">&quot;gpio_state&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">fps</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">barcode_bit_duration_s</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="p">)</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># bpod_barcodes: list of (time_s, barcode_int) decoded from Bpod events</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">offset_s</span> <span class="o">=</span> <span class="n">align_barcodes</span><span class="p">(</span><span class="n">bpod_barcodes</span><span class="p">,</span> <span class="n">cam_barcodes</span><span class="p">,</span> <span class="n">max_hamming</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Apply the offset</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="n">df</span><span class="p">[</span><span class="s2">&quot;bpod_time&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">&quot;timestamp_s&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset_s</span>
 </code></pre></div>
 <p><code>offset_s</code> satisfies <code>bpod_time = camera_time + offset_s</code>.  Up to
 <code>max_hamming</code> bit errors per barcode are tolerated; the median offset across
@@ -1002,38 +1042,38 @@ all matched pairs is used for robustness.</p>
 <h3 id="ttl-edge-alignment-fallback">TTL-edge alignment (fallback)<a class="headerlink" href="#ttl-edge-alignment-fallback" title="Permanent link">&para;</a></h3>
 <p>Use this when barcodes are absent or too sparse but Bpod pulsed a BNC line
 (e.g. at trial start/end) that the camera GPIO recorded.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.alignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">align_ttl_edges</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># bpod_trial_times: list of trial-start times (seconds) in Bpod clock</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">offset_s</span> <span class="o">=</span> <span class="n">align_ttl_edges</span><span class="p">(</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">df</span><span class="p">,</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">bpod_trial_times</span><span class="p">,</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">gpio_col</span><span class="o">=</span><span class="s2">&quot;gpio_state&quot;</span><span class="p">,</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">max_offset_search_s</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="n">min_matches</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="p">)</span>
-<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
-<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">df</span><span class="p">[</span><span class="s2">&quot;bpod_time&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">&quot;timestamp_s&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset_s</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.alignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">align_ttl_edges</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># bpod_trial_times: list of trial-start times (seconds) in Bpod clock</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">offset_s</span> <span class="o">=</span> <span class="n">align_ttl_edges</span><span class="p">(</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">df</span><span class="p">,</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">bpod_trial_times</span><span class="p">,</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="n">gpio_col</span><span class="o">=</span><span class="s2">&quot;gpio_state&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="n">max_offset_search_s</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="n">min_matches</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="p">)</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="n">df</span><span class="p">[</span><span class="s2">&quot;bpod_time&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">&quot;timestamp_s&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset_s</span>
 </code></pre></div>
 <p>This method cross-correlates rising GPIO edges with Bpod event times via a
 histogram search.  It requires at least <code>min_matches</code> agreeing edge pairs.</p>
 <hr />
 <h2 id="cli-quick-reference">CLI quick reference<a class="headerlink" href="#cli-quick-reference" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Locate Bonsai.exe</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>msw-flir<span class="w"> </span>find-bonsai
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># List cameras</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>msw-flir<span class="w"> </span>list-cameras<span class="w"> </span>--driver<span class="w"> </span>flycap
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>msw-flir<span class="w"> </span>list-cameras<span class="w"> </span>--driver<span class="w"> </span>spinnaker
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Run session (blocks until Ctrl+C)</span>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>msw-flir<span class="w"> </span>run<span class="w"> </span>D:<span class="se">\D</span>ATA<span class="se">\v</span>ideo<span class="w"> </span>mouse001__20260524<span class="w"> </span>--n-cameras<span class="w"> </span><span class="m">2</span><span class="w"> </span>--fps<span class="w"> </span><span class="m">60</span>
-<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
-<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Short test recording</span>
-<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>msw-flir<span class="w"> </span>test-record<span class="w"> </span>--cam-index<span class="w"> </span><span class="m">0</span><span class="w"> </span>--duration<span class="w"> </span><span class="m">5</span>
-<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
-<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="c1"># All subcommands also available via msw flir when murineshiftwork is installed</span>
-<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>msw<span class="w"> </span>flir<span class="w"> </span>run<span class="w"> </span>D:<span class="se">\D</span>ATA<span class="se">\v</span>ideo<span class="w"> </span>mouse001__20260524<span class="w"> </span>--n-cameras<span class="w"> </span><span class="m">2</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Locate Bonsai.exe</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>msw-flir<span class="w"> </span>find-bonsai
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># List cameras</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>msw-flir<span class="w"> </span>list-cameras<span class="w"> </span>--driver<span class="w"> </span>flycap
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>msw-flir<span class="w"> </span>list-cameras<span class="w"> </span>--driver<span class="w"> </span>spinnaker
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Run session (blocks until Ctrl+C)</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>msw-flir<span class="w"> </span>run<span class="w"> </span>D:<span class="se">\D</span>ATA<span class="se">\v</span>ideo<span class="w"> </span>mouse001__20260524<span class="w"> </span>--n-cameras<span class="w"> </span><span class="m">2</span><span class="w"> </span>--fps<span class="w"> </span><span class="m">60</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Short test recording</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>msw-flir<span class="w"> </span>test-record<span class="w"> </span>--cam-index<span class="w"> </span><span class="m">0</span><span class="w"> </span>--duration<span class="w"> </span><span class="m">5</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># All subcommands also available via msw flir when murineshiftwork is installed</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>msw<span class="w"> </span>flir<span class="w"> </span>run<span class="w"> </span>D:<span class="se">\D</span>ATA<span class="se">\v</span>ideo<span class="w"> </span>mouse001__20260524<span class="w"> </span>--n-cameras<span class="w"> </span><span class="m">2</span>
 </code></pre></div>
 <p>See <a href="cli/">CLI reference</a> for full option tables.</p>
 
