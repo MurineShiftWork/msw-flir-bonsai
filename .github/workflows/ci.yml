@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     tags-ignore: ["v*"]   # tag pushes are handled by release.yml
   pull_request:
     branches: [main]
@@ -43,7 +43,7 @@ jobs:
 
         os: [ubuntu-latest, windows-latest]
 
-        python-version: ["3.11", "3.13"]
+        python-version: ["3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v6
