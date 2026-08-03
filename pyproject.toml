@@ -8,6 +8,9 @@ dynamic = ["version"]
 description = "FLIR camera control via Bonsai for murine shift work experiments"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { file = "LICENSE" }
+classifiers = [
+    "License :: Free for non-commercial use",
+]
 authors = [
     { name = "Lars B. Rollik", email = "lars@rollik.me" },
 ]
