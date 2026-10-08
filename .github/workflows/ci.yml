@@ -16,7 +16,7 @@ env:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
     steps:
       - uses: actions/checkout@v6
@@ -41,7 +41,7 @@ jobs:
       fail-fast: false
       matrix:
 
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-26.04, windows-latest]
 
         python-version: ["3.12", "3.13"]
 
@@ -62,7 +62,7 @@ jobs:
 
   ci:
     name: CI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [lint, test]
     if: always()
     steps:
