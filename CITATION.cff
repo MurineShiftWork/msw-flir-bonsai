@@ -5,7 +5,8 @@ title: "msw-flir-bonsai: FLIR camera control via Bonsai for murine shift work"
 version: "0.1.0"
 repository-code: https://github.com/murineshiftwork/msw-flir-bonsai
 url: https://github.com/murineshiftwork/msw-flir-bonsai
-license: LicenseRef-MSW-NonCommercial
+# BSD-3-Clause-NonCommercial has no SPDX id, so CFF points at the licence file instead.
+license-url: https://github.com/MurineShiftWork/msw-flir-bonsai/blob/main/LICENSE
 authors:
   - family-names: Rollik
     given-names: Lars B.
