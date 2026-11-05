@@ -186,6 +186,8 @@ class TestStartStop:
         assert seen == [True]  # stop file existed while waiting for Bonsai
         assert runner._stop_file is not None
         assert not runner._stop_file.exists()  # and is cleaned up
+        assert runner._layout_file is not None  # flycap-1cam bundles a layout
+        assert not runner._layout_file.exists()
         mock_proc.terminate.assert_not_called()
         mock_proc.kill.assert_not_called()
 

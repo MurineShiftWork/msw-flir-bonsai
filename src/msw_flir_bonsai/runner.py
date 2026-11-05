@@ -96,6 +96,7 @@ class BonsaiCameraRunner:
         self._monitor_thread: threading.Thread | None = None
         self._stopped = threading.Event()
         self._stop_file: Path | None = None
+        self._layout_file: Path | None = None
 
     def _build_cmd(self) -> list[str]:
         """Assemble the Bonsai subprocess command list with all -p property flags."""
@@ -143,6 +144,7 @@ class BonsaiCameraRunner:
             / f"msw-bonsai-{os.getpid()}-cam{self._cam_index}.layout"
         )
         out.write_text(xml, encoding="utf-8")
+        self._layout_file = out
         return out
 
     def start(self) -> None:
@@ -226,8 +228,9 @@ class BonsaiCameraRunner:
                 else:
                     self._process.kill()
                 self._process.wait(timeout=5.0)
-        if self._stop_file is not None:
-            self._stop_file.unlink(missing_ok=True)
+        for f in (self._stop_file, self._layout_file):
+            if f is not None:
+                f.unlink(missing_ok=True)
 
     def wait(self, timeout: float | None = None) -> int | None:
         """Block until the subprocess exits. Returns the return code."""
