@@ -26,12 +26,10 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import tempfile
 import threading
 import time
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from pathlib import Path
 
 from msw_flir_bonsai.bonsai_workflows import workflow_path
 
@@ -97,6 +95,7 @@ class BonsaiCameraRunner:
         self._process: subprocess.Popen | None = None
         self._monitor_thread: threading.Thread | None = None
         self._stopped = threading.Event()
+        self._stop_file: Path | None = None
 
     def _build_cmd(self) -> list[str]:
         """Assemble the Bonsai subprocess command list with all -p property flags."""
@@ -132,10 +131,26 @@ class BonsaiCameraRunner:
         logging.info(f"[BonsaiCamera cam{self._cam_index}] Starting: {' '.join(cmd)}")
 
         self._stopped.clear()
+        # Graceful stop: Extensions/key-ctrl-stop.bonsai polls this file and
+        # completes the stream once it exists, so the AVI/CSV writers flush and
+        # close and Bonsai exits.
+        self._stop_file = (
+            Path(tempfile.gettempdir())
+            / f"msw-bonsai-{os.getpid()}-cam{self._cam_index}.stop"
+        )
+        self._stop_file.unlink(missing_ok=True)
         self._process = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env={
+                **os.environ,
+                "MSW_BONSAI_STOP_FILE": str(self._stop_file),
+                "MSW_BONSAI_PARENT_PID": str(os.getpid()),
+            },
+            # Own process group: a Ctrl+C in the caller's console must not kill
+            # Bonsai before the caller has shut down and requested a clean stop.
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
         )
 
         self._monitor_thread = threading.Thread(
@@ -169,16 +184,27 @@ class BonsaiCameraRunner:
             return
         self._stopped.set()
         if self._process.poll() is None:
-            logging.info(f"[BonsaiCamera cam{self._cam_index}] Terminating process")
-            self._process.terminate()
+            logging.info(f"[BonsaiCamera cam{self._cam_index}] Requesting stop")
+            if self._stop_file is not None:
+                self._stop_file.touch()
             try:
                 self._process.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
                 logging.warning(
-                    f"[BonsaiCamera cam{self._cam_index}] Terminate timed out; killing"
+                    f"[BonsaiCamera cam{self._cam_index}] Stop timed out; killing"
                 )
-                self._process.kill()
+                if os.name == "nt":
+                    # Bonsai.exe relaunches itself as a child worker; kill() would only
+                    # kill the launcher and orphan the worker. Kill the whole tree.
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(self._process.pid)],
+                        capture_output=True,
+                    )
+                else:
+                    self._process.kill()
                 self._process.wait(timeout=5.0)
+        if self._stop_file is not None:
+            self._stop_file.unlink(missing_ok=True)
 
     def wait(self, timeout: float | None = None) -> int | None:
         """Block until the subprocess exits. Returns the return code."""

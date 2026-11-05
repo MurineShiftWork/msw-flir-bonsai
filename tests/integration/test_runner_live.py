@@ -76,7 +76,7 @@ def test_runner_creates_output_dir(tmp_path) -> None:
 
 @requires_bonsai
 def test_runner_stop_timeout_kills(tmp_path) -> None:
-    """stop() falls back to kill() if terminate() times out."""
+    """stop() kills the process (tree) if the graceful stop times out."""
     runner = _default_runner(tmp_path)
     runner.start()
     time.sleep(1)

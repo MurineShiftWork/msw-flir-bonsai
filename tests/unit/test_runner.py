@@ -141,15 +141,37 @@ class TestStartStop:
             with pytest.raises(RuntimeError, match="already running"):
                 runner.start()
 
-    def test_stop_calls_terminate(self) -> None:
+    def test_start_passes_stop_file_and_own_process_group(self) -> None:
         runner = _make_runner()
         mock_proc = self._mock_process(returncode=None)
+
+        with patch("subprocess.Popen", return_value=mock_proc) as popen:
+            runner.start()
+
+        env = popen.call_args.kwargs["env"]
+        assert env["MSW_BONSAI_STOP_FILE"].endswith("-cam0.stop")
+        assert env["MSW_BONSAI_PARENT_PID"].isdigit()
+        assert popen.call_args.kwargs["creationflags"] == getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        )
+
+    def test_stop_requests_graceful_stop(self) -> None:
+        runner = _make_runner()
+        mock_proc = self._mock_process(returncode=None)
+        seen: list[bool] = []
+        mock_proc.wait.side_effect = lambda timeout=None: seen.append(
+            runner._stop_file is not None and runner._stop_file.exists()
+        )
 
         with patch("subprocess.Popen", return_value=mock_proc):
             runner.start()
             runner.stop()
 
-        mock_proc.terminate.assert_called_once()
+        assert seen == [True]  # stop file existed while waiting for Bonsai
+        assert runner._stop_file is not None
+        assert not runner._stop_file.exists()  # and is cleaned up
+        mock_proc.terminate.assert_not_called()
+        mock_proc.kill.assert_not_called()
 
     def test_stop_before_start_is_noop(self) -> None:
         runner = _make_runner()
@@ -202,7 +224,24 @@ class TestStartStop:
 
         assert runner.wait(timeout=0.001) is None
 
-    def test_stop_kills_on_terminate_timeout(self) -> None:
+    def test_stop_kills_on_timeout(self) -> None:
+        runner = _make_runner()
+        mock_proc = self._mock_process(returncode=None)
+        mock_proc.wait.side_effect = [
+            subprocess.TimeoutExpired(cmd="bonsai", timeout=0.001),
+            None,
+        ]
+
+        with (
+            patch("subprocess.Popen", return_value=mock_proc),
+            patch("msw_flir_bonsai.runner.os.name", "posix"),
+        ):
+            runner.start()
+            runner.stop(timeout=0.001)
+
+        mock_proc.kill.assert_called_once()
+
+    def test_stop_kills_process_tree_on_windows(self) -> None:
         runner = _make_runner()
         mock_proc = self._mock_process(returncode=None)
         mock_proc.wait.side_effect = [
@@ -212,10 +251,16 @@ class TestStartStop:
 
         with patch("subprocess.Popen", return_value=mock_proc):
             runner.start()
+        # only stop() takes the Windows branch; start() builds a host-native path
+        with (
+            patch("subprocess.run") as run,
+            patch("msw_flir_bonsai.runner.os.name", "nt"),
+        ):
             runner.stop(timeout=0.001)
 
-        mock_proc.terminate.assert_called_once()
-        mock_proc.kill.assert_called_once()
+        run.assert_called_once()
+        assert run.call_args.args[0] == ["taskkill", "/F", "/T", "/PID", "12345"]
+        mock_proc.kill.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
