@@ -118,9 +118,32 @@ class BonsaiCameraRunner:
             "--start",
             "--no-editor",
         ]
+        layout = self._preview_layout()
+        if layout is not None:
+            cmd += ["--visualizer-layout", str(layout)]
         for key, value in props.items():
             cmd += ["-p", f"{key}={value}"]
         return cmd
+
+    def _preview_layout(self) -> Path | None:
+        """Per-camera copy of the workflow's ``.bonsai.layout`` (live preview window).
+
+        The window is shifted right by camera index so several cameras sit side by
+        side. Returns None when the workflow has no layout file.
+        """
+        template = Path(f"{self._workflow_path}.layout")
+        if not template.exists():
+            return None
+        x = 40 + self._cam_index * 660
+        xml = template.read_text(encoding="utf-8").replace(
+            "<Location><X>40</X>", f"<Location><X>{x}</X>", 1
+        )
+        out = (
+            Path(tempfile.gettempdir())
+            / f"msw-bonsai-{os.getpid()}-cam{self._cam_index}.layout"
+        )
+        out.write_text(xml, encoding="utf-8")
+        return out
 
     def start(self) -> None:
         """Launch the Bonsai subprocess and begin background monitoring."""

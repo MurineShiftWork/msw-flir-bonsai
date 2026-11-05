@@ -6,6 +6,7 @@ All subprocess calls are mocked: no Bonsai installation required.
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -49,6 +50,20 @@ def _make_runner(
 
 
 class TestBuildCmd:
+    def test_preview_layout_shifted_per_camera(self) -> None:
+        runner = _make_runner(workflow="run-flir-flycap-1cam", cam_index=1)
+        cmd = runner._build_cmd()
+        assert "--visualizer-layout" in cmd
+        layout = Path(cmd[cmd.index("--visualizer-layout") + 1])
+        try:
+            assert "<Location><X>700</X>" in layout.read_text(encoding="utf-8")
+        finally:
+            layout.unlink(missing_ok=True)
+
+    def test_no_preview_layout_without_layout_file(self) -> None:
+        runner = _make_runner(workflow="run-flir-spinnaker-1cam", driver="spinnaker")
+        assert "--visualizer-layout" not in runner._build_cmd()
+
     def test_flycap_includes_ts_and_framecounter(self) -> None:
         runner = _make_runner(driver="flycap")
         cmd = runner._build_cmd()
