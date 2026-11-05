@@ -44,7 +44,10 @@ fallback-version = "0.1.0"
 version-file = "src/msw_flir_bonsai/_version.py"
 
 [tool.hatch.build]
-artifacts = ["src/msw_flir_bonsai/bonsai_workflows/*.bonsai"]
+artifacts = [
+    "src/msw_flir_bonsai/bonsai_workflows/**/*.bonsai",
+    "src/msw_flir_bonsai/bonsai_workflows/*.bonsai.layout",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/msw_flir_bonsai"]

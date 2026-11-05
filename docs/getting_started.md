@@ -105,7 +105,7 @@ print(runner.pid)     # OS process ID for the Bonsai process
 
 # ... wait, run behaviour task, etc. ...
 
-runner.stop()         # sends SIGTERM; Bonsai flushes open files before exiting
+runner.stop()         # asks Bonsai to finish; it flushes and closes its files
 runner.wait(timeout=15)
 ```
 

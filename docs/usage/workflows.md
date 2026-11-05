@@ -48,14 +48,33 @@ Bonsai.exe workflow.bonsai --start --no-editor -p basepath="D:\..." -p session="
 ```
 
 - **Start**: the `--start` flag; no keyboard or socket needed.
-- **Stop**: `process.terminate()` → Bonsai catches the signal, flushes open
-  files, and exits cleanly.
+- **Stop**: `stop()` creates a stop file whose path is passed to Bonsai in
+  `MSW_BONSAI_STOP_FILE`. `Extensions\key-ctrl-stop.bonsai` checks for it every
+  0.2 s (and for the caller's process, `MSW_BONSAI_PARENT_PID`, having exited)
+  and then completes the stream, so the video and CSV writers flush and close
+  and Bonsai exits on its own. If that does not happen within the timeout, the
+  process is killed; on Windows the whole process tree (`taskkill /T`), because
+  `Bonsai.exe` relaunches itself as a child worker.
+- Bonsai runs in its own process group, so a Ctrl+C in the calling console does
+  not reach it before the caller has shut down and requested the stop.
 
-### Keyboard shortcuts in the workflow
+### Bundled extension workflows
 
-The workflow XML references `Extensions\key-ctrl-start.bonsai` and
-`Extensions\key-ctrl-stop.bonsai`.  These are Bonsai editor UI bindings :
-they are **inactive in `--no-editor` mode** and can be ignored.
+Every bundled workflow includes three extension workflows from `Extensions\`,
+shipped with the package:
+
+| file | role |
+|---|---|
+| `key-ctrl-stop.bonsai` | completes the stream on the stop file (see above) |
+| `key-ctrl-start.bonsai` | pass-through: start is handled by `--start` |
+| `measure-rate.bonsai` | pass-through: no rate display in `--no-editor` mode |
+
+### Live preview
+
+If a workflow has a `<workflow>.bonsai.layout` next to it (bundled for
+`run-flir-flycap-1cam`), each camera starts with `--visualizer-layout` pointing
+at its own copy of that layout, with the preview window shifted right by camera
+index so several cameras sit side by side. The copy is deleted on `stop()`.
 
 ### Alternative control mechanisms
 
@@ -67,8 +86,8 @@ If per-trial start/stop (without relaunching Bonsai) is ever needed:
 | **File-system sentinel** | Bonsai `FileSystemWatcher` watches for a file; Python creates/deletes it |
 | **OSC** | Low-latency via Bonsai OSC package; common in neuroscience tooling |
 
-For the standard MSW use case (one Bonsai process per session), `--start` +
-`terminate()` is complete and correct.
+For the standard MSW use case (one Bonsai process per session), `--start` plus
+the stop file is sufficient.
 
 ## Output structure
 

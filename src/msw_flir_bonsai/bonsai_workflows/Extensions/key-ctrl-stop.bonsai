@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Graceful stop for msw: passes Source1 through until the file named by the
+     MSW_BONSAI_STOP_FILE environment variable exists (or the MSW_BONSAI_PARENT_PID process
+     is gone), then completes the stream so the VideoWriter / CsvWriter downstream flush
+     and close, and Bonsai exits on its own.
+     Without the variable it never stops (runner falls back to killing the process). -->
+<WorkflowBuilder Version="2.8.5"
+                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xmlns:rx="clr-namespace:Bonsai.Reactive;assembly=Bonsai.Core"
+                 xmlns:ipy="clr-namespace:Bonsai.Scripting.IronPython;assembly=Bonsai.Scripting.IronPython"
+                 xmlns="https://bonsai-rx.org/2018/workflow">
+  <Workflow>
+    <Nodes>
+      <Expression xsi:type="WorkflowInput">
+        <Name>Source1</Name>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:Timer">
+          <rx:DueTime>PT0S</rx:DueTime>
+          <rx:Period>PT0.2S</rx:Period>
+        </Combinator>
+      </Expression>
+      <Expression xsi:type="ipy:PythonTransform">
+        <ipy:Script>import os
+from System.Diagnostics import Process
+
+stop_file = os.environ.get("MSW_BONSAI_STOP_FILE", "")
+parent_pid = int(os.environ.get("MSW_BONSAI_PARENT_PID", "0") or 0)
+
+def parent_gone():
+  # Bonsai runs shielded from console Ctrl+C, so stop on our own if msw dies
+  if not parent_pid:
+    return False
+  try:
+    Process.GetProcessById(parent_pid)
+    return False
+  except:
+    return True
+
+@returns(bool)
+def process(value):
+  return (bool(stop_file) and os.path.exists(stop_file)) or parent_gone()</ipy:Script>
+      </Expression>
+      <!-- emits False first, then True once the file appears; Skip(1) drops the False -->
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:DistinctUntilChanged" />
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:Skip">
+          <rx:Count>1</rx:Count>
+        </Combinator>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:TakeUntil" />
+      </Expression>
+      <Expression xsi:type="WorkflowOutput" />
+    </Nodes>
+    <Edges>
+      <Edge From="0" To="5" Label="Source1" />
+      <Edge From="1" To="2" Label="Source1" />
+      <Edge From="2" To="3" Label="Source1" />
+      <Edge From="3" To="4" Label="Source1" />
+      <Edge From="4" To="5" Label="Source2" />
+      <Edge From="5" To="6" Label="Source1" />
+    </Edges>
+  </Workflow>
+</WorkflowBuilder>
