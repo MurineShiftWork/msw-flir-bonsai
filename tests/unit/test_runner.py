@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -247,11 +248,10 @@ class TestStartStop:
             None,
         ]
 
-        with (
-            patch("subprocess.Popen", return_value=mock_proc),
-            patch("msw_flir_bonsai.runner.os.name", "posix"),
-        ):
+        with patch("subprocess.Popen", return_value=mock_proc):
             runner.start()
+        # only stop() takes the POSIX branch; start() builds a host-native path
+        with patch("msw_flir_bonsai.runner.os.name", "posix"):
             runner.stop(timeout=0.001)
 
         mock_proc.kill.assert_called_once()
@@ -385,7 +385,7 @@ class TestMultiCameraRunnerDelegation:
         runners = [MagicMock(spec=BonsaiCameraRunner) for _ in range(n)]
         for r in runners:
             r.is_running = True
-        multi = MultiCameraRunner(runners)  # type: ignore[arg-type]
+        multi = MultiCameraRunner(cast("list[BonsaiCameraRunner]", runners))
         return multi, runners
 
     def test_start_calls_all(self) -> None:
