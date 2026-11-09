@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -56,6 +57,38 @@ class TestListCameras:
     def test_spinnaker_not_installed_exits_one(self) -> None:
         with patch.dict("sys.modules", {"PySpin": None}):
             result = runner.invoke(app, ["list-cameras", "--driver", "spinnaker"])
+        assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# probe-cameras
+
+
+class TestProbeCameras:
+    def test_json_output(self) -> None:
+        from msw_flir_bonsai.probe import CameraInfo, ProbeResult
+
+        found = ProbeResult("flycap", "sdk", 1, [CameraInfo(0, "12345678")])
+        with patch("msw_flir_bonsai.probe.probe_cameras", return_value=found):
+            result = runner.invoke(app, ["probe-cameras", "--json"])
+        assert result.exit_code == 0
+        assert json.loads(result.output)["cameras"] == [
+            {"index": 0, "serial": "12345678"}
+        ]
+
+    def test_unavailable_exits_one(self) -> None:
+        from msw_flir_bonsai.probe import ProbeResult
+
+        with patch(
+            "msw_flir_bonsai.probe.probe_cameras",
+            return_value=ProbeResult("spinnaker", error="not found"),
+        ):
+            result = runner.invoke(app, ["probe-cameras", "-d", "spinnaker"])
+        assert result.exit_code == 1
+        assert "via none" in result.output
+
+    def test_unknown_driver_exits_one(self) -> None:
+        result = runner.invoke(app, ["probe-cameras", "--driver", "pylon"])
         assert result.exit_code == 1
 
 

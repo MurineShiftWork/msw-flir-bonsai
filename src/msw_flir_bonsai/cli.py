@@ -3,17 +3,20 @@
 Standalone usage (after pip install msw_flir_bonsai):
     msw-flir find-bonsai
     msw-flir list-cameras --driver flycap
+    msw-flir probe-cameras --driver spinnaker --json
     msw-flir run D:\\DATA\\video mouse001__20260524 --n-cameras 2 --fps 60
     msw-flir test-record --cam-index 0 --duration 5
 
 Plugin usage (when registered as msw.cli entry-point and MSW is installed):
     msw flir find-bonsai
     msw flir list-cameras
+    msw flir probe-cameras
     msw flir run ...
 """
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -136,6 +139,45 @@ def _list_spinnaker() -> None:
         cam.DeInit()
     cam_list.Clear()
     system.ReleaseInstance()
+
+
+# ---------------------------------------------------------------------------
+# probe-cameras  (SDK via ctypes in a child process, USB fallback)
+
+
+@app.command("probe-cameras")
+def probe_cameras_cmd(
+    driver: str = typer.Option(
+        "flycap", "--driver", "-d", help="Camera driver: flycap or spinnaker"
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Print the result as JSON"),
+    timeout: float = typer.Option(
+        10.0, "--timeout", help="Seconds before the SDK probe is killed"
+    ),
+) -> None:
+    """Print the connected cameras' index and serial without opening them.
+
+    Uses the FlyCapture2 or Spinnaker C library in a child process, falling
+    back to the Windows USB device list (count and USB serials only). Exits 1
+    when neither source could be read.
+    """
+    from msw_flir_bonsai.probe import DRIVERS, probe_cameras
+
+    if driver not in DRIVERS:
+        typer.echo(f"Unknown driver '{driver}'. Use flycap or spinnaker.", err=True)
+        raise typer.Exit(1)
+    result = probe_cameras(driver, timeout=timeout)
+    if as_json:
+        typer.echo(json.dumps(result.to_dict()))
+    else:
+        count = "?" if result.count is None else result.count
+        typer.echo(f"{driver}: {count} camera(s) via {result.source}")
+        for cam in result.cameras:
+            idx = "-" if cam.index is None else cam.index
+            typer.echo(f"  [{idx}]  serial={cam.serial or '?'}")
+        if result.error:
+            typer.echo(f"note: {result.error}", err=True)
+    raise typer.Exit(1 if result.source == "none" else 0)
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +352,7 @@ def register(sub_parsers: object) -> None:
     Called by the MSW CLI plugin loader at startup.  Usage after registration:
         msw flir find-bonsai
         msw flir list-cameras --driver flycap
+        msw flir probe-cameras --driver flycap --json
         msw flir run <output_dir> <session> --n-cameras 2
         msw flir test-record --cam-index 0 --duration 5
     """

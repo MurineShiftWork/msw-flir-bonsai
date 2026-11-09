@@ -6,6 +6,7 @@ post-session data alignment to Bpod behavioural clocks.
 
 Sub-modules:
     runner     -- BonsaiCameraRunner and MultiCameraRunner subprocess management
+    probe      -- connected cameras by serial (vendor C library, USB fallback)
     timestamps -- CSV loading, timestamp unwrapping, dropped-frame detection
     alignment  -- barcode and TTL-edge alignment to Bpod clocks
     readers    -- load_session: per-camera completeness of a video_flir acq dir
