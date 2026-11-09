@@ -89,6 +89,31 @@ class TestBuildCmd:
         assert "cam1fps" not in joined
         assert "cam1ts" not in joined
 
+    def test_spinnaker_serial_passed_when_set(self) -> None:
+        runner = BonsaiCameraRunner(
+            workflow="run-flir-spinnaker-1cam",
+            acqdir=_ACQDIR,
+            cam_basename=_CAM_BASENAME,
+            driver="spinnaker",
+            cam_serial="12345678",
+            bonsai_exe="C:/Bonsai.exe",
+        )
+        assert "cam1serial=12345678" in runner._build_cmd()
+
+    def test_serial_omitted_when_empty_or_flycap(self) -> None:
+        spin = _make_runner(workflow="run-flir-spinnaker-1cam", driver="spinnaker")
+        flycap = BonsaiCameraRunner(
+            workflow="run-flir-flycap-1cam",
+            acqdir=_ACQDIR,
+            cam_basename=_CAM_BASENAME,
+            cam_serial="12345678",
+            bonsai_exe="C:/Bonsai.exe",
+        )
+        assert "cam1serial" not in " ".join(spin._build_cmd())
+        cmd = flycap._build_cmd()
+        assert "cam1serial" not in " ".join(cmd)
+        Path(cmd[cmd.index("--visualizer-layout") + 1]).unlink(missing_ok=True)
+
     def test_cam_index_passed(self) -> None:
         runner = _make_runner(cam_index=2)
         cmd = runner._build_cmd()

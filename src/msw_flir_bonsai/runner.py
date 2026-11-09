@@ -62,6 +62,9 @@ class BonsaiCameraRunner:
             ``"mouse01__dt__video_flir.mswflir.top.0"``.  The workflow appends
             ``.avi`` / ``.timestamps.csv`` to produce output filenames.
         cam_index: Camera SDK enumeration index (``cam1idx`` workflow property).
+        cam_serial: Camera serial number (``cam1serial``, Spinnaker only). When
+            set, the Spinnaker node selects the camera by serial and ignores
+            the index; empty keeps index selection.
         fps: Target frame rate (FlyCapture only; ignored for Spinnaker).  Frame
             rate should be configured in camera non-volatile memory; only pass
             this for an explicit CLI override.
@@ -78,6 +81,7 @@ class BonsaiCameraRunner:
         cam_index: int = 0,
         fps: int | None = None,
         driver: str = "flycap",
+        cam_serial: str = "",
         bonsai_exe: str | Path | None = None,
         extra_props: dict[str, str] | None = None,
         startup_timeout: float = _STARTUP_TIMEOUT,
@@ -87,6 +91,7 @@ class BonsaiCameraRunner:
         self._acqdir = str(acqdir)
         self._cam_basename = cam_basename
         self._cam_index = cam_index
+        self._cam_serial = cam_serial
         self._fps = fps
         self._driver = driver
         self._extra_props = extra_props or {}
@@ -110,6 +115,8 @@ class BonsaiCameraRunner:
                 props["cam1fps"] = str(self._fps)
             props["cam1ts"] = "True"
             props["cam1framecounter"] = "True"
+        elif self._driver == "spinnaker" and self._cam_serial:
+            props["cam1serial"] = self._cam_serial
 
         props.update(self._extra_props)
 
