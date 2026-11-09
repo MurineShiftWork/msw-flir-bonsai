@@ -36,6 +36,13 @@ from msw_flir_bonsai.bonsai_workflows import workflow_path
 _BONSAI_EXE_ENV = "BONSAI_EXE"
 _STARTUP_POLL_INTERVAL = 0.5
 _STARTUP_TIMEOUT = 30.0
+# A Bonsai process that exits this soon after launch never recorded: the
+# camera is missing or busy, or the workflow failed to load.
+_EARLY_EXIT_S = 5.0
+
+
+class BonsaiStartError(RuntimeError):
+    """A Bonsai camera process exited right after launch."""
 
 
 def _find_bonsai_exe(bonsai_exe: str | Path | None = None) -> str:
@@ -102,6 +109,7 @@ class BonsaiCameraRunner:
         self._stopped = threading.Event()
         self._stop_file: Path | None = None
         self._layout_file: Path | None = None
+        self._started_at = 0.0
 
     def _build_cmd(self) -> list[str]:
         """Assemble the Bonsai subprocess command list with all -p property flags."""
@@ -185,6 +193,7 @@ class BonsaiCameraRunner:
             creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
         )
 
+        self._started_at = time.monotonic()
         self._monitor_thread = threading.Thread(
             target=self._monitor,
             daemon=True,
@@ -194,6 +203,27 @@ class BonsaiCameraRunner:
         logging.info(
             f"[BonsaiCamera cam{self._cam_index}] Process started "
             f"(pid={self._process.pid})"
+        )
+
+    def check_started(self, within: float = _EARLY_EXIT_S) -> None:
+        """Block until ``within`` seconds after :meth:`start`; raise if Bonsai exited.
+
+        Bonsai exits 0 when its camera is missing, so a clean return code does
+        not mean it recorded; any exit this early is a failed start.
+
+        Raises:
+            BonsaiStartError: The process exited within ``within`` seconds.
+        """
+        if self._process is None:
+            return
+        remaining = self._started_at + within - time.monotonic()
+        try:
+            rc = self._process.wait(timeout=max(remaining, 0.0))
+        except subprocess.TimeoutExpired:
+            return
+        raise BonsaiStartError(
+            f"Bonsai cam{self._cam_index} exited within {within:g} s of launch "
+            f"(returncode={rc}): camera missing or in use, or the workflow failed"
         )
 
     def _monitor(self) -> None:
@@ -313,10 +343,29 @@ class MultiCameraRunner:
         ]
         return cls(runners)
 
-    def start(self) -> None:
-        """Start all camera subprocesses sequentially."""
+    def start(self, check_s: float = _EARLY_EXIT_S) -> None:
+        """Start all camera subprocesses, then check none exited early.
+
+        The check waits ``check_s`` seconds once for all cameras (each is
+        measured from its own launch). ``check_s=0`` skips it.
+
+        Raises:
+            BonsaiStartError: A camera exited within ``check_s``; all cameras
+                are stopped before raising.
+        """
         for runner in self._runners:
             runner.start()
+        if check_s <= 0:
+            return
+        failed = []
+        for runner in self._runners:
+            try:
+                runner.check_started(check_s)
+            except BonsaiStartError as e:
+                failed.append(str(e))
+        if failed:
+            self.stop()
+            raise BonsaiStartError("; ".join(failed))
 
     def stop(self, timeout: float = 5.0) -> None:
         """Stop all camera subprocesses in parallel and wait for them to exit."""

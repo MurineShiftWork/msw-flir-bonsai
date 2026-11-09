@@ -15,6 +15,7 @@ import pytest
 from msw_flir_bonsai.bonsai_workflows import workflow_path
 from msw_flir_bonsai.runner import (
     BonsaiCameraRunner,
+    BonsaiStartError,
     MultiCameraRunner,
     _find_bonsai_exe,
 )
@@ -215,6 +216,25 @@ class TestStartStop:
         assert not runner._layout_file.exists()
         mock_proc.terminate.assert_not_called()
         mock_proc.kill.assert_not_called()
+
+    def test_check_started_raises_on_early_exit(self) -> None:
+        runner = _make_runner()
+        mock_proc = self._mock_process(returncode=0)
+        mock_proc.wait.return_value = 0
+
+        with patch("subprocess.Popen", return_value=mock_proc):
+            runner.start()
+        with pytest.raises(BonsaiStartError, match="returncode=0"):
+            runner.check_started(within=0.1)
+
+    def test_check_started_passes_while_running(self) -> None:
+        runner = _make_runner()
+        mock_proc = self._mock_process(returncode=None)
+        mock_proc.wait.side_effect = subprocess.TimeoutExpired("bonsai", 0.1)
+
+        with patch("subprocess.Popen", return_value=mock_proc):
+            runner.start()
+        runner.check_started(within=0.1)
 
     def test_stop_before_start_is_noop(self) -> None:
         runner = _make_runner()
@@ -420,6 +440,20 @@ class TestMultiCameraRunnerDelegation:
         multi.start()
         for r in runners:
             r.start.assert_called_once()
+
+    def test_start_checks_each_runner(self) -> None:
+        multi, runners = self._make_multi()
+        multi.start(check_s=2.0)
+        for r in runners:
+            r.check_started.assert_called_once_with(2.0)
+
+    def test_start_stops_all_on_early_exit(self) -> None:
+        multi, runners = self._make_multi()
+        runners[1].check_started.side_effect = BonsaiStartError("cam1 exited")
+        with pytest.raises(BonsaiStartError, match="cam1 exited"):
+            multi.start()
+        for r in runners:
+            r.stop.assert_called_once()
 
     def test_stop_calls_all(self) -> None:
         multi, runners = self._make_multi()

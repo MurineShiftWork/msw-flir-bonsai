@@ -281,7 +281,7 @@ def test_record(
     Useful for checking camera index, frame rate, and output path before
     a real session.  Duration defaults to 5 seconds.
     """
-    from msw_flir_bonsai.runner import BonsaiCameraRunner
+    from msw_flir_bonsai.runner import BonsaiCameraRunner, BonsaiStartError
 
     resolved_workflow = workflow or f"run-flir-{driver}-1cam"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -301,7 +301,11 @@ def test_record(
     )
     runner.start()
     try:
-        time.sleep(duration)
+        runner.check_started(min(duration, 5.0))
+        time.sleep(max(duration - 5.0, 0.0))
+    except BonsaiStartError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
     except KeyboardInterrupt:
         pass
     finally:
