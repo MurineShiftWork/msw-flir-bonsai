@@ -42,6 +42,67 @@ FlyCapture2: 2 camera(s) found
 
 The index shown is the value to pass as `cameras.cam_index` or `--cam-index`.
 
+## probe-cameras
+
+Print the index and serial of each connected camera without opening it, so a
+setup can name its cameras by serial instead of by enumeration index.
+
+```
+msw-flir probe-cameras --driver flycap
+msw-flir probe-cameras --driver spinnaker --json
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--driver`, `-d` | `flycap` | `flycap` or `spinnaker` |
+| `--json` | off | Print `{driver, source, count, cameras: [{index, serial}], error}` |
+| `--timeout` | `10` | Seconds before the SDK probe is killed |
+
+`source` says where the answer came from:
+
+- `sdk`: the FlyCapture2 or Spinnaker C library (`FlyCapture2_C.dll`,
+  `SpinnakerC_v140.dll`), loaded through ctypes in a child process. No Python
+  SDK wrapper is needed. Index and serial per camera.
+- `usb`: the SDK was missing, crashed or hung. Windows PnP devices from vendor
+  `0x1E10`: count and USB serial strings, no index order.
+- `none`: neither worked; exits 1.
+
+The C library is searched in `MSW_FLIR_FC2_DLL` / `MSW_FLIR_SPIN_DLL` (full
+path), then on the DLL search path, then in the default `Program Files`
+install directories.
+
+### Naming cameras by serial
+
+Add `serial` to each camera in the setup YAML (msw-core `CameraUnit`):
+
+```yaml
+cameras:
+  backend: flir_bonsai
+  driver: flycap
+  cameras:
+    - {index: 0, name: top, serial: "12345678"}
+    - {index: 1, name: side, serial: "87654321"}
+```
+
+Before Bonsai starts, `resolve_camera_units` checks the probe against the
+setup. FlyCapture launches each camera at the index the SDK reports for its
+serial; Spinnaker passes the serial to Bonsai (`cam1serial`). A serial that is
+not connected, or fewer cameras than the setup needs, refuses the start. With
+no serials configured only the count is checked. With source `none` it warns
+and launches by configured index. A Bonsai process that exits within 5 s of
+launch also fails the start (`BonsaiStartError`).
+
+### Verifying on a rig
+
+1. `msw flir probe-cameras -d flycap` (and `-d spinnaker`): `source` should be
+   `sdk` and the serials should match the camera labels.
+2. Unplug one camera and run it again: the count drops and the remaining
+   serial keeps its identity even when its index changes.
+3. List the USB serials with
+   `Get-PnpDevice -PresentOnly | ? InstanceId -like 'USB\VID_1E10*'` in
+   PowerShell and compare them with the SDK serials. Until they are known to
+   match, the `usb` source only checks the camera count.
+
 ## run
 
 Launch N independent Bonsai camera subprocesses (one per camera index).
