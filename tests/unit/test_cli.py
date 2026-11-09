@@ -78,3 +78,13 @@ class TestRegister:
         register(sub)
         args = parser.parse_args(["flir", "run", "D:/DATA", "session1"])
         assert args.flir_args == ["run", "D:/DATA", "session1"]
+
+    def test_dispatch_accepts_msw_cli_keyword_call(self) -> None:
+        # msw-core calls func(**args_dict), including keys such as "command"
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="command")
+        register(sub)
+        args = vars(parser.parse_args(["flir", "list-cameras"]))
+        with patch("msw_flir_bonsai.cli.main") as main:
+            args["func"](**args)
+        main.assert_called_once()
