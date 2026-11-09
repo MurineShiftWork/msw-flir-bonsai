@@ -287,11 +287,15 @@ def main() -> None:
 # duplication of argument definitions.
 
 
-def _dispatch_flir(args: dict) -> None:
-    """Forward remaining CLI args to the Typer app when invoked via ``msw flir``."""
+def _dispatch_flir(flir_args: list[str] | None = None, **_: object) -> None:
+    """Forward remaining CLI args to the Typer app when invoked via ``msw flir``.
+
+    The MSW CLI calls ``func(**args)`` with every parsed argument, so the other keys
+    (``command``, ...) are accepted and ignored.
+    """
     import sys
 
-    flir_args: list[str] = args.get("flir_args", []) or ["--help"]
+    flir_args = flir_args or ["--help"]
     old_argv = sys.argv[:]
     sys.argv = ["msw-flir"] + flir_args
     try:
