@@ -219,20 +219,22 @@ class TestLoadLibrary:
 # USB fallback
 
 
+# parent composite devices carry the hex serial; MI_ children a Windows id
 _PNP = [
-    r"USB\VID_1E10&PID_3300\12345678",
+    r"USB\VID_1E10&PID_3300\00BC614E",
     r"USB\VID_1E10&PID_3300&MI_00\6&1A2B3C4D&0&0000",
-    r"USB\VID_1E10&PID_3300\12345678",
+    r"USB\VID_1E10&PID_3300\00bc614e",
+    r"USB\VID_1E10&PID_3300\05397FB1",
     r"USB\VID_1E10&PID_4000\5&2A3B4C&0&3",
     r"USB\VID_046D&PID_C077\00000001",
     "",
 ]
 
 
-def test_parse_usb_ids() -> None:
+def test_parse_usb_ids_hex_to_decimal() -> None:
     assert parse_usb_ids(_PNP) == [
         CameraInfo(None, "12345678"),
-        CameraInfo(None, ""),
+        CameraInfo(None, "87654321"),
     ]
 
 
@@ -411,11 +413,18 @@ class TestResolve:
         with pytest.raises(CameraMismatchError, match="via usb"):
             resolve_camera_units(units, "flycap", usb)
 
-    def test_usb_serial_mismatch_warns(self, caplog) -> None:
-        usb = ProbeResult("flycap", "usb", 1, [CameraInfo(None, "00BC614E")])
-        plan = resolve_camera_units([_unit(0, "top", "12345678")], "flycap", usb)
-        assert plan[0].index == 0
-        assert "not in the USB device list" in caplog.text
+    def test_usb_serial_missing_refuses(self) -> None:
+        usb = ProbeResult("flycap", "usb", 2, parse_usb_ids(_PNP))
+        units = [_unit(0, "top", "12345678"), _unit(1, "side", "11223344")]
+        with pytest.raises(CameraMismatchError, match=r"11223344.*source=usb"):
+            resolve_camera_units(units, "flycap", usb)
+
+    def test_usb_serials_keep_configured_index(self, caplog) -> None:
+        usb = ProbeResult("flycap", "usb", 2, parse_usb_ids(_PNP))
+        units = [_unit(1, "top", "12345678"), _unit(0, "side", "087654321")]
+        plan = resolve_camera_units(units, "flycap", usb)
+        assert [c.index for c in plan] == [1, 0]
+        assert "configured index" in caplog.text
 
     def test_no_units(self) -> None:
         assert resolve_camera_units([], "flycap", _sdk()) == []

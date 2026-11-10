@@ -14,8 +14,8 @@ Mechanism, in order of preference (:func:`probe_cameras`):
    ``DeviceSerialNumber`` from the transport-layer node map without
    ``spinCameraInit``.
 2. ``usb``: the Windows PnP list of present USB devices from vendor ``0x1E10``
-   (FLIR / Point Grey). Gives the count and the USB serial strings, but not the
-   SDK index order.
+   (FLIR / Point Grey). Gives the count and the serials, but not the SDK
+   index order.
 3. ``none``: neither worked; callers keep launching by configured index.
 
 :func:`resolve_camera_units` turns a probe and the configured cameras into the
@@ -31,9 +31,11 @@ Critical choices:
   or another tool may hold them, and enumeration needs no exclusive access.
 - Every ctypes function gets explicit ``argtypes`` and ``restype``. Handles are
   pointers; the default ``int`` restype would truncate them on 64-bit Windows.
-- USB serial strings are not trusted to equal the SDK serial until checked on a
-  rig, so with the ``usb`` source a serial mismatch warns and only a camera
-  count shortfall refuses.
+- The USB serial sits on the parent "USB Composite Device"
+  (``USB\\VID_1E10&PID_xxxx\\<serial>``) as hex; the camera interface
+  children (``...&MI_00\\<windows id>``) carry no serial. The hex is converted
+  to the decimal serial the SDK and the setup use, so the ``usb`` source can
+  check serials, just not their index.
 
 Where to start reading: :func:`probe_cameras`, :func:`probe_sdk`,
 :func:`resolve_camera_units`.
@@ -71,8 +73,9 @@ _FC2_NAMES = ("FlyCapture2_C", "FlyCapture2_C_v140", "FlyCapture2_C_v100")
 _SPIN_NAMES = ("SpinnakerC_v140", "SpinnakerC_v143", "SpinnakerC_v120", "SpinnakerC")
 
 _USB_VENDOR = "1E10"  # FLIR Integrated Imaging Solutions / Point Grey
-# Top-level device only (no &MI_ interface children). The last part is the
-# USB serial string, or a Windows-made id containing '&' when there is none.
+# Parent composite device only (no &MI_ interface children). The last part is
+# the camera serial in hex, or a Windows-made id containing '&' when the device
+# has no USB serial string.
 _USB_ID = re.compile(
     rf"^USB\\VID_{_USB_VENDOR}&PID_([0-9A-F]{{4}})\\([^\\]+)$", re.IGNORECASE
 )
@@ -355,22 +358,23 @@ def probe_sdk(
 def parse_usb_ids(lines: Sequence[str]) -> list[CameraInfo]:
     """Pick FLIR / Point Grey cameras out of PnP instance ids.
 
-    Interface children (``...&MI_00``) and duplicates are dropped. A device
-    without a USB serial string gets ``serial=""``.
+    Only parent composite devices count; interface children (``...&MI_00``)
+    are dropped. The hex serial is returned as a decimal string, duplicates
+    once. A device whose last id part is not hex is skipped (debug log).
     """
-    seen: set[str] = set()
-    cameras = []
+    serials: list[str] = []
     for line in lines:
         m = _USB_ID.match(line.strip())
         if not m:
             continue
-        key = m.group(0).upper()
-        if key in seen:
+        try:
+            serial = str(int(m.group(2), 16))
+        except ValueError:
+            log.debug(f"USB device without a hex serial skipped: {line.strip()}")
             continue
-        seen.add(key)
-        serial = m.group(2)
-        cameras.append(CameraInfo(index=None, serial="" if "&" in serial else serial))
-    return cameras
+        if serial not in serials:
+            serials.append(serial)
+    return [CameraInfo(index=None, serial=s) for s in serials]
 
 
 def probe_usb(driver: str, timeout: float = 10.0) -> ProbeResult:
@@ -484,8 +488,9 @@ def _norm(serial: object) -> str:
     return str(serial or "").strip()
 
 
-def _usb_norm(serial: str) -> str:
-    return serial.lstrip("0").upper()
+def _serial_key(serial: str) -> str:
+    # setup serials are decimal; tolerate leading zeros
+    return str(int(serial)) if serial.isdigit() else serial
 
 
 def resolve_camera_units(
@@ -503,9 +508,9 @@ def resolve_camera_units(
       launches at the serial's index; Spinnaker passes the serial to Bonsai.
       Cameras without a serial keep their index, which must exist and not
       collide with a serial-resolved one.
-    - Serials with source ``"usb"``: require ``count >= len(units)``. A serial
-      missing from the USB list only warns (the USB string is not verified to
-      be the camera serial); FlyCapture keeps the configured index.
+    - Serials with source ``"usb"``: require ``count >= len(units)`` and every
+      serial connected. USB gives no index order, so FlyCapture keeps the
+      configured index (warning).
 
     Raises:
         CameraMismatchError: Cameras are missing, a serial is not connected,
@@ -542,27 +547,36 @@ def resolve_camera_units(
     if probe.source == "usb":
         if count < len(plan):
             raise CameraMismatchError(f"setup needs {len(plan)} camera(s); {label}")
-        found_usb = {_usb_norm(c.serial) for c in probe.cameras}
+        found_usb = {_serial_key(c.serial) for c in probe.cameras}
         missing = [
-            c.serial for c in plan if c.serial and _usb_norm(c.serial) not in found_usb
+            c.serial
+            for c in plan
+            if c.serial and _serial_key(c.serial) not in found_usb
         ]
         if missing:
-            log.warning(f"Serials {missing} not in the USB device list ({label})")
+            raise CameraMismatchError(
+                f"camera serial(s) {missing} not connected; {label} (source=usb): "
+                f"{sorted(found_usb)}"
+            )
         if not pass_serial:
             log.warning("No SDK index order via USB: FlyCapture uses configured index")
         return _finish(plan, pass_serial)
 
     by_serial = {
-        c.serial: c.index for c in probe.cameras if c.serial and c.index is not None
+        _serial_key(c.serial): c.index
+        for c in probe.cameras
+        if c.serial and c.index is not None
     }
-    missing = [c.serial for c in plan if c.serial and c.serial not in by_serial]
+    missing = [
+        c.serial for c in plan if c.serial and _serial_key(c.serial) not in by_serial
+    ]
     if missing:
         raise CameraMismatchError(
             f"camera serial(s) {missing} not connected; {label}: {sorted(by_serial)}"
         )
     for c in plan:
         if c.serial:
-            c.index = by_serial[c.serial]
+            c.index = by_serial[_serial_key(c.serial)]
         elif c.index >= count:
             raise CameraMismatchError(
                 f"camera {c.name or c.index!r} has no serial and index {c.index} "
