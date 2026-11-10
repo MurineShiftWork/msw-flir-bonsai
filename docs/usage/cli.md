@@ -151,6 +151,9 @@ msw-flir run D:\DATA\video mouse001__20260524 --n-cameras 2 --fps 60
 ## test-record
 
 Run a short test recording from a single camera to verify the setup.
+Bonsai exits 0 even when it could not record, so the command judges the
+outcome itself: it exits 1 when Bonsai exited before the stop was requested
+(at any time) or when `<session>.timestamps.csv` is missing or empty.
 
 ```
 msw-flir test-record [options]
