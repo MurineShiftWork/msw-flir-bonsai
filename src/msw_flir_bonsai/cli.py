@@ -287,7 +287,9 @@ def main() -> None:
 # duplication of argument definitions.
 
 
-def _dispatch_flir(flir_args: list[str] | None = None, **_: object) -> None:
+def _dispatch_flir(
+    flir_args: list[str] | None = None, flir_help: bool = False, **_: object
+) -> None:
     """Forward remaining CLI args to the Typer app when invoked via ``msw flir``.
 
     The MSW CLI calls ``func(**args)`` with every parsed argument, so the other keys
@@ -295,7 +297,9 @@ def _dispatch_flir(flir_args: list[str] | None = None, **_: object) -> None:
     """
     import sys
 
-    flir_args = flir_args or ["--help"]
+    flir_args = list(flir_args or [])
+    if flir_help or not flir_args:
+        flir_args = ["--help"] if not flir_args else [*flir_args, "--help"]
     old_argv = sys.argv[:]
     sys.argv = ["msw-flir"] + flir_args
     try:
@@ -315,10 +319,15 @@ def register(sub_parsers: object) -> None:
     """
     import argparse
 
+    # add_help=False: `msw flir` and `msw flir --help` must reach the Typer app's
+    # help (the real command list), not an argparse stub. The MSW CLI also appends
+    # -h when `msw flir` has no further arguments.
     p = sub_parsers.add_parser(  # type: ignore[attr-defined]
         "flir",
         help="FLIR camera tools (msw-flir-bonsai): run 'msw flir --help'",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False,
     )
+    p.add_argument("-h", "--help", dest="flir_help", action="store_true")
     p.add_argument("flir_args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
     p.set_defaults(func=_dispatch_flir)

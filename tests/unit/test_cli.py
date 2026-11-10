@@ -6,6 +6,8 @@ import argparse
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
+import pytest
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -88,3 +90,28 @@ class TestRegister:
         with patch("msw_flir_bonsai.cli.main") as main:
             args["func"](**args)
         main.assert_called_once()
+
+    @pytest.mark.parametrize(
+        ("argv", "forwarded"),
+        [
+            (["flir", "-h"], ["--help"]),  # `msw flir`: the MSW CLI appends -h
+            (["flir", "--help"], ["--help"]),
+            (["flir", "find-bonsai", "--help"], ["find-bonsai", "--help"]),
+            (["flir", "list-cameras"], ["list-cameras"]),
+        ],
+    )
+    def test_help_reaches_the_typer_app(self, argv, forwarded) -> None:
+        import sys
+
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="command")
+        register(sub)
+        args = vars(parser.parse_args(argv))
+        seen = {}
+
+        def _main():
+            seen["argv"] = sys.argv[1:]
+
+        with patch("msw_flir_bonsai.cli.main", _main):
+            args["func"](**args)
+        assert seen["argv"] == forwarded
