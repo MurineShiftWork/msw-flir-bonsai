@@ -36,20 +36,19 @@ from msw_flir_bonsai.bonsai_workflows import workflow_path
 _BONSAI_EXE_ENV = "BONSAI_EXE"
 _STARTUP_POLL_INTERVAL = 0.5
 _STARTUP_TIMEOUT = 30.0
-# A Bonsai process that exits this soon after launch never recorded: the
-# camera is missing or busy, or the workflow failed to load. Bonsai returns 0
-# in these cases, so an early exit is judged by time, not by return code.
-# Provisional: Bonsai can take longer than this to give up on a camera. The
-# plan is to judge a start by the first frame written, pending rig timing
-# measurements; until then callers also check exited_unexpectedly.
-_EARLY_EXIT_S = 5.0
-# After an early exit the driver can hold the camera for a moment; a relaunch
+# A start succeeds when the camera's .avi has data: the first frame. Not the
+# exit code, which is 0 when Bonsai finds no camera (it exits ~4-5 s after
+# launch). Not the timestamps CSV, which stays 0 B until its first 4 KB block
+# (several seconds of frames). The .avi has data ~5 s after launch.
+_START_TIMEOUT_S = 15.0
+_START_POLL_S = 0.25
+# After a failed launch the driver can hold the camera for a moment; a relaunch
 # straight away fails the same way.
 _EARLY_EXIT_RETRY_DELAY_S = 3.0
 
 
 class BonsaiStartError(RuntimeError):
-    """A Bonsai camera process exited right after launch."""
+    """A Bonsai camera process did not write its first frame."""
 
 
 def _find_bonsai_exe(bonsai_exe: str | Path | None = None) -> str:
@@ -85,11 +84,10 @@ class BonsaiCameraRunner:
         driver: ``"flycap"`` or ``"spinnaker"``: controls which properties are passed.
         extra_props: Additional ``-p key=value`` pairs forwarded to Bonsai CLI.
         startup_timeout: Seconds to wait for the subprocess to start before raising.
-        start_window: Seconds after launch within which an exit counts as a
-            failed start (:meth:`check_started`). Provisional, see
-            ``_EARLY_EXIT_S``.
-        retry_delay: Seconds to wait before the single relaunch after an early
-            exit (:meth:`check_started`); None disables the relaunch.
+        start_timeout: Seconds after launch for the first frame to reach the
+            ``.avi`` (:meth:`check_started`).
+        retry_delay: Seconds to wait before the single relaunch after Bonsai
+            exited without a frame (:meth:`check_started`); None disables it.
     """
 
     def __init__(
@@ -104,7 +102,7 @@ class BonsaiCameraRunner:
         bonsai_exe: str | Path | None = None,
         extra_props: dict[str, str] | None = None,
         startup_timeout: float = _STARTUP_TIMEOUT,
-        start_window: float = _EARLY_EXIT_S,
+        start_timeout: float = _START_TIMEOUT_S,
         retry_delay: float | None = _EARLY_EXIT_RETRY_DELAY_S,
     ) -> None:
         self._bonsai_exe = _find_bonsai_exe(bonsai_exe)
@@ -117,7 +115,8 @@ class BonsaiCameraRunner:
         self._driver = driver
         self._extra_props = extra_props or {}
         self._startup_timeout = startup_timeout
-        self._start_window = start_window
+        self._start_timeout = start_timeout
+        self._avi_before: tuple[int, int] | None = None
         self._retry_delay = retry_delay
         self._exited_unexpectedly = False
 
@@ -189,6 +188,7 @@ class BonsaiCameraRunner:
 
         self._stopped.clear()
         self._exited_unexpectedly = False
+        self._avi_before = self._avi_stat()
         # Graceful stop: Extensions/key-ctrl-stop.bonsai polls this file and
         # completes the stream once it exists, so the AVI/CSV writers flush and
         # close and Bonsai exits.
@@ -224,53 +224,107 @@ class BonsaiCameraRunner:
             f"(pid={self._process.pid})"
         )
 
-    def check_started(self, within: float | None = None) -> None:
-        """Block until ``within`` seconds after :meth:`start`; raise if Bonsai exited.
+    @property
+    def avi_path(self) -> Path:
+        """The video file the workflow writes: ``<acqdir>/<cam_basename>.avi``."""
+        return Path(self._acqdir) / f"{self._cam_basename}.avi"
 
-        Bonsai exits 0 when its camera is missing or still held, so the return
-        code says nothing; any exit this early is a failed start. The first
-        early exit is logged and Bonsai is relaunched once after
-        ``retry_delay`` seconds, because the camera may not be released yet.
+    def _avi_stat(self) -> tuple[int, int] | None:
+        try:
+            st = self.avi_path.stat()
+        except OSError:
+            return None
+        return st.st_size, st.st_mtime_ns
+
+    def _start_status(self) -> str | None:
+        """``""`` once the first frame is written, a failure reason, or None."""
+        stat = self._avi_stat()
+        # a file left from an earlier run (same size and mtime) is not a frame
+        if stat is not None and stat[0] > 0 and stat != self._avi_before:
+            return ""
+        assert self._process is not None
+        rc = self._process.poll()
+        if rc is not None:
+            age = time.monotonic() - self._started_at
+            return (
+                f"Bonsai cam{self._cam_index} exited {age:.1f} s after launch "
+                f"without a frame (returncode={rc}): camera missing or in use, "
+                "or the workflow failed"
+            )
+        return None
+
+    def check_started(
+        self,
+        timeout: float | None = None,
+        expect_present: bool = True,
+        deadline: float | None = None,
+    ) -> None:
+        """Block until the first frame is in the ``.avi``; raise if it never is.
+
+        Polls every 0.25 s. The start fails when Bonsai exits first (at any
+        time; its return code is 0 either way) or when ``timeout`` (default
+        ``start_timeout``) passes with Bonsai alive but no frame; Bonsai is
+        then stopped. After an exit without a frame Bonsai is relaunched once
+        after ``retry_delay`` s, because the camera may not be released yet,
+        unless ``expect_present=False`` (the caller knows the camera is
+        missing, so the relaunch would fail too). The relaunch gets a fresh
+        ``timeout``.
+
+        Args:
+            timeout: Seconds from launch to wait for the first frame.
+            expect_present: False skips the relaunch.
+            deadline: ``time.monotonic()`` deadline for the first attempt,
+                shared by several cameras; overrides ``timeout`` for it.
 
         Raises:
-            BonsaiStartError: The process exited within ``within`` seconds,
-                on the relaunch too (or with the relaunch disabled).
-                ``within`` defaults to ``start_window``.
+            BonsaiStartError: No frame: Bonsai exited (on the relaunch too)
+                or the timeout passed.
         """
         if self._process is None:
             return
-        if within is None:
-            within = self._start_window
-        rc = self._wait_early_exit(within)
-        if rc is None:
+        if timeout is None:
+            timeout = self._start_timeout
+        if deadline is None:
+            deadline = self._started_at + timeout
+        msg = self._wait_first_frame(deadline)
+        if msg is None:
             return
-        msg = (
-            f"Bonsai cam{self._cam_index} exited within {within:g} s of launch "
-            f"(returncode={rc}): camera missing or in use, or the workflow failed"
-        )
-        if self._retry_delay is None:
+        if not msg.startswith("Bonsai") or self._retry_delay is None:
             raise BonsaiStartError(msg)
+        if not expect_present:
+            raise BonsaiStartError(f"{msg} (no relaunch: camera not detected)")
         logging.warning(
             f"[BonsaiCamera cam{self._cam_index}] {msg}; attempt 1 of 2, "
             f"relaunching in {self._retry_delay:g} s"
         )
         time.sleep(self._retry_delay)
         self.start()
-        rc = self._wait_early_exit(within)
-        if rc is None:
-            logging.info(f"[BonsaiCamera cam{self._cam_index}] Relaunch running")
+        msg = self._wait_first_frame(self._started_at + timeout)
+        if msg is None:
+            logging.info(f"[BonsaiCamera cam{self._cam_index}] Relaunch recording")
             return
         logging.error(f"[BonsaiCamera cam{self._cam_index}] {msg}; attempt 2 of 2")
         raise BonsaiStartError(f"{msg} (after one relaunch)")
 
-    def _wait_early_exit(self, within: float) -> int | None:
-        """Return code if the process exits within ``within`` s of start, else None."""
-        assert self._process is not None
-        remaining = self._started_at + within - time.monotonic()
-        try:
-            return self._process.wait(timeout=max(remaining, 0.0))
-        except subprocess.TimeoutExpired:
-            return None
+    def _wait_first_frame(self, deadline: float) -> str | None:
+        """None once a frame is written, else the failure reason.
+
+        Exit reasons start with ``"Bonsai"``; on a timeout Bonsai is stopped
+        and the reason starts with ``"no frame"``.
+        """
+        while True:
+            status = self._start_status()
+            if status == "":
+                return None
+            if status is not None:
+                return status
+            if time.monotonic() >= deadline:
+                self.stop()
+                return (
+                    f"no frame from cam{self._cam_index} in {self.avi_path.name} "
+                    "before the start timeout; Bonsai stopped"
+                )
+            time.sleep(_START_POLL_S)
 
     def _monitor(self, proc: subprocess.Popen) -> None:
         """Poll ``proc`` in a daemon thread and record an exit before stop.
@@ -408,27 +462,40 @@ class MultiCameraRunner:
         ]
         return cls(runners)
 
-    def start(self, check_s: float | None = None) -> None:
-        """Start all camera subprocesses, then check none exited early.
+    def start(self, timeout: float | None = None, expect_present: bool = True) -> None:
+        """Start all camera subprocesses, then wait for every first frame.
 
-        The check waits ``check_s`` seconds (default: each runner's
-        ``start_window``) once for all cameras, each measured from its own
-        launch. ``check_s=0`` skips it.
+        The cameras are waited for in parallel against one shared deadline
+        (``timeout`` from now, default each runner's ``start_timeout``).
+        ``timeout=0`` skips the wait. ``expect_present`` is passed to
+        :meth:`BonsaiCameraRunner.check_started`.
 
         Raises:
-            BonsaiStartError: A camera exited within ``check_s``; all cameras
-                are stopped before raising.
+            BonsaiStartError: A camera wrote no frame; all cameras are stopped
+                before raising.
         """
         for runner in self._runners:
             runner.start()
-        if check_s is not None and check_s <= 0:
+        if timeout is not None and timeout <= 0:
             return
-        failed = []
-        for runner in self._runners:
+        deadline = None if timeout is None else time.monotonic() + timeout
+        failed: list[str] = []
+
+        def wait(runner: BonsaiCameraRunner) -> None:
             try:
-                runner.check_started(check_s)
+                runner.check_started(
+                    timeout, expect_present=expect_present, deadline=deadline
+                )
             except BonsaiStartError as e:
                 failed.append(str(e))
+
+        threads = [
+            threading.Thread(target=wait, args=(r,), daemon=True) for r in self._runners
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         if failed:
             self.stop()
             raise BonsaiStartError("; ".join(failed))
