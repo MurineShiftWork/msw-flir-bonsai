@@ -93,6 +93,39 @@ class TestProbeCameras:
 
 
 # ---------------------------------------------------------------------------
+# test-record
+
+
+class TestTestRecord:
+    def test_no_bonsai_is_a_clear_error(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv("BONSAI_EXE", raising=False)
+        with patch("msw_flir_bonsai.cli._BONSAI_SEARCH_PATHS", [tmp_path / "x.exe"]):
+            result = runner.invoke(
+                app, ["test-record", "-d", "spinnaker", "--output-dir", str(tmp_path)]
+            )
+        assert result.exit_code == 1
+        assert "Bonsai.exe not found" in result.output
+        assert not isinstance(result.exception, OSError)
+
+    def test_discovered_bonsai_used(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv("BONSAI_EXE", raising=False)
+        exe = tmp_path / "Bonsai.exe"
+        exe.touch()
+        with (
+            patch("msw_flir_bonsai.cli._BONSAI_SEARCH_PATHS", [exe]),
+            patch("msw_flir_bonsai.runner.BonsaiCameraRunner") as cls,
+        ):
+            result = runner.invoke(
+                app,
+                ["test-record", "-d", "spinnaker", "--duration", "0"]
+                + ["--output-dir", str(tmp_path / "out")],
+            )
+        assert result.exit_code == 0, result.output
+        assert cls.call_args.kwargs["bonsai_exe"] == str(exe)
+        assert cls.call_args.kwargs["driver"] == "spinnaker"
+
+
+# ---------------------------------------------------------------------------
 # register(): argparse bridge
 
 
