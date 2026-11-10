@@ -317,19 +317,33 @@ def test_record(
         f"Test recording: cam_index={cam_index}  driver={driver}  fps={fps}  "
         f"duration={duration}s"
     )
+    t0 = time.monotonic()
     runner.start()
+    exited = False
     try:
-        runner.check_started(min(duration, 5.0))
-        time.sleep(max(duration - 5.0, 0.0))
+        runner.check_started()
+        time.sleep(max(duration - (time.monotonic() - t0), 0.0))
     except BonsaiStartError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(1) from e
     except KeyboardInterrupt:
         pass
     finally:
+        # read before stop(): stop() marks any later exit as requested
+        exited = runner.exited_unexpectedly
         runner.stop()
         runner.wait(timeout=10)
 
+    # Bonsai exits 0 when it could not record, so check the outcome instead
+    timestamps = output_dir / f"{session}.timestamps.csv"
+    problems = []
+    if exited:
+        problems.append("Bonsai exited before the recording was stopped")
+    if not timestamps.is_file() or timestamps.stat().st_size == 0:
+        problems.append(f"timestamps file missing or empty: {timestamps}")
+    if problems:
+        typer.echo("Test recording failed: " + "; ".join(problems), err=True)
+        raise typer.Exit(1)
     typer.echo(f"Done. Output written to: {output_dir}")
 
 
