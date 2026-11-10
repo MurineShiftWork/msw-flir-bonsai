@@ -119,10 +119,10 @@ class BonsaiCameraRunner:
         self._avi_before: tuple[int, int] | None = None
         self._retry_delay = retry_delay
         self._exited_unexpectedly = False
-        # process whose exit the start check reports: set at launch, cleared
-        # at the first frame. The monitor stays quiet about it so one failure
-        # is not logged twice; exited_unexpectedly still reports it.
-        self._start_checked: subprocess.Popen | None = None
+        # The monitor stays quiet while check_started runs and about an exit
+        # the check has already logged, so one failure is logged exactly once.
+        self._checking = False
+        self._exit_reported: subprocess.Popen | None = None
 
         self._process: subprocess.Popen | None = None
         self._monitor_thread: threading.Thread | None = None
@@ -216,7 +216,6 @@ class BonsaiCameraRunner:
         )
 
         self._started_at = time.monotonic()
-        self._start_checked = self._process
         self._monitor_thread = threading.Thread(
             target=self._monitor,
             args=(self._process,),
@@ -250,6 +249,7 @@ class BonsaiCameraRunner:
         assert self._process is not None
         rc = self._process.poll()
         if rc is not None:
+            self._exit_reported = self._process  # check_started logs it
             age = time.monotonic() - self._started_at
             return (
                 f"Bonsai cam{self._cam_index} exited {age:.1f} s after launch "
@@ -287,6 +287,15 @@ class BonsaiCameraRunner:
         """
         if self._process is None:
             return
+        self._checking = True
+        try:
+            self._check_started(timeout, expect_present, deadline)
+        finally:
+            self._checking = False
+
+    def _check_started(
+        self, timeout: float | None, expect_present: bool, deadline: float | None
+    ) -> None:
         if timeout is None:
             timeout = self._start_timeout
         if deadline is None:
@@ -294,10 +303,12 @@ class BonsaiCameraRunner:
         msg = self._wait_first_frame(deadline)
         if msg is None:
             return
-        if not msg.startswith("Bonsai") or self._retry_delay is None:
+        exited = msg.startswith("Bonsai")  # a timeout is never relaunched
+        if exited and not expect_present:
+            msg += " (no relaunch: camera not detected)"
+        if not exited or not expect_present or self._retry_delay is None:
+            logging.error(f"[BonsaiCamera cam{self._cam_index}] {msg}")
             raise BonsaiStartError(msg)
-        if not expect_present:
-            raise BonsaiStartError(f"{msg} (no relaunch: camera not detected)")
         logging.warning(
             f"[BonsaiCamera cam{self._cam_index}] {msg}; attempt 1 of 2, "
             f"relaunching in {self._retry_delay:g} s"
@@ -320,7 +331,6 @@ class BonsaiCameraRunner:
         while True:
             status = self._start_status()
             if status == "":
-                self._start_checked = None  # recording: the monitor reports exits
                 return None
             if status is not None:
                 return status
@@ -336,15 +346,15 @@ class BonsaiCameraRunner:
         """Poll ``proc`` in a daemon thread and record an exit before stop.
 
         Takes the process it watches: after a relaunch the old thread must not
-        flag the new process. Before the first frame the start check reports
-        the exit, so the monitor only flags it and does not log.
+        flag the new process. While check_started runs, and for an exit it
+        has logged, the monitor only flags the exit; otherwise it logs it.
         """
         while not self._stopped.is_set() and proc is self._process:
             rc = proc.poll()
             if rc is not None:
                 if not self._stopped.is_set() and proc is self._process:
                     self._exited_unexpectedly = True
-                    if proc is not self._start_checked:
+                    if not self._checking and proc is not self._exit_reported:
                         logging.error(
                             f"[BonsaiCamera cam{self._cam_index}] "
                             f"Process exited unexpectedly (returncode={rc})"
@@ -485,8 +495,6 @@ class MultiCameraRunner:
         for runner in self._runners:
             runner.start()
         if timeout is not None and timeout <= 0:
-            for runner in self._runners:
-                runner._start_checked = None  # no start check: monitor logs exits
             return
         deadline = None if timeout is None else time.monotonic() + timeout
         failed: list[str] = []
