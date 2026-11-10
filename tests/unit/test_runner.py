@@ -457,7 +457,7 @@ class TestFirstFrame:
 
     def test_monitor_quiet_before_first_frame(self, tmp_path, caplog) -> None:
         runner = self._runner(tmp_path, retry_delay=None)
-        proc = FakeProc(0.0)
+        proc = FakeProc(0.05)
         with patch("subprocess.Popen", return_value=proc):
             runner.start()
             with pytest.raises(BonsaiStartError):
@@ -465,6 +465,15 @@ class TestFirstFrame:
         runner._monitor(cast("subprocess.Popen", proc))
         assert runner.exited_unexpectedly
         assert "exited unexpectedly" not in caplog.text
+        assert "without a frame" in caplog.text  # logged once, by the check
+
+    def test_monitor_logs_early_exit_without_check(self, tmp_path, caplog) -> None:
+        runner = self._runner(tmp_path)
+        proc = FakeProc(0.0)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+        runner._monitor(cast("subprocess.Popen", proc))
+        assert "exited unexpectedly" in caplog.text
 
     def test_monitor_logs_exit_after_first_frame(self, tmp_path, caplog) -> None:
         runner = self._runner(tmp_path)
