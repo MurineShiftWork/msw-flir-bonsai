@@ -219,6 +219,7 @@ class TestStartStop:
 
     def test_check_started_raises_on_early_exit(self) -> None:
         runner = _make_runner()
+        runner._retry_delay = None
         mock_proc = self._mock_process(returncode=0)
         mock_proc.wait.return_value = 0
 
@@ -226,6 +227,33 @@ class TestStartStop:
             runner.start()
         with pytest.raises(BonsaiStartError, match="returncode=0"):
             runner.check_started(within=0.1)
+
+    def test_early_exit_relaunches_once_then_raises(self, caplog) -> None:
+        runner = _make_runner()
+        runner._retry_delay = 0.01
+        mock_proc = self._mock_process(returncode=0)
+        mock_proc.wait.return_value = 0
+
+        with patch("subprocess.Popen", return_value=mock_proc) as popen:
+            runner.start()
+            with pytest.raises(BonsaiStartError, match="after one relaunch"):
+                runner.check_started(within=0.1)
+        assert popen.call_count == 2
+        assert "attempt 1 of 2" in caplog.text
+        assert "attempt 2 of 2" in caplog.text
+
+    def test_early_exit_relaunch_succeeds(self) -> None:
+        runner = _make_runner()
+        runner._retry_delay = 0.01
+        failed = self._mock_process(returncode=0)
+        failed.wait.return_value = 0
+        running = self._mock_process(returncode=None)
+        running.wait.side_effect = subprocess.TimeoutExpired("bonsai", 0.1)
+
+        with patch("subprocess.Popen", side_effect=[failed, running]):
+            runner.start()
+            runner.check_started(within=0.1)
+        assert runner.is_running
 
     def test_check_started_passes_while_running(self) -> None:
         runner = _make_runner()
