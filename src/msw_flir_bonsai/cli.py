@@ -40,6 +40,11 @@ _BONSAI_SEARCH_PATHS = [
 # find-bonsai
 
 
+def _discover_bonsai() -> Path | None:
+    """First existing Bonsai.exe in the known install locations, or None."""
+    return next((p for p in _BONSAI_SEARCH_PATHS if p.exists()), None)
+
+
 @app.command("find-bonsai")
 def find_bonsai() -> None:
     """Scan known install locations and print the Bonsai.exe path.
@@ -47,10 +52,10 @@ def find_bonsai() -> None:
     Copy the printed path into your setup YAML under cameras.bonsai_exe,
     or set the BONSAI_EXE environment variable.
     """
-    for p in _BONSAI_SEARCH_PATHS:
-        if p.exists():
-            typer.echo(str(p))
-            raise typer.Exit(0)
+    found = _discover_bonsai()
+    if found is not None:
+        typer.echo(str(found))
+        raise typer.Exit(0)
     lines = "\n".join(f"  {p}" for p in _BONSAI_SEARCH_PATHS)
     typer.echo(
         f"Bonsai.exe not found in known locations:\n{lines}\n\n"
@@ -263,7 +268,7 @@ def test_record(
         0, "--cam-index", "-c", help="Camera index (0-based)"
     ),
     driver: str = typer.Option(
-        "flycap", "--driver", help="Camera driver: flycap or spinnaker"
+        "flycap", "--driver", "-d", help="Camera driver: flycap or spinnaker"
     ),
     fps: int = typer.Option(30, "--fps", help="Target frame rate"),
     duration: float = typer.Option(
@@ -279,21 +284,34 @@ def test_record(
     """Run a short test recording from a single camera to verify the setup.
 
     Useful for checking camera index, frame rate, and output path before
-    a real session.  Duration defaults to 5 seconds.
+    a real session.  Duration defaults to 5 seconds.  Without --bonsai-exe or
+    BONSAI_EXE, Bonsai.exe is looked up like find-bonsai.
     """
     from msw_flir_bonsai.runner import BonsaiCameraRunner, BonsaiStartError
 
+    exe = bonsai_exe or _discover_bonsai()
+    if exe is None:
+        typer.echo(
+            "Bonsai.exe not found: pass --bonsai-exe, set BONSAI_EXE, or run "
+            "msw-flir find-bonsai to see the searched locations.",
+            err=True,
+        )
+        raise typer.Exit(1)
     resolved_workflow = workflow or f"run-flir-{driver}-1cam"
+    try:
+        runner = BonsaiCameraRunner(
+            workflow=resolved_workflow,
+            acqdir=str(output_dir),
+            cam_basename=session,
+            cam_index=cam_index,
+            fps=fps,
+            driver=driver,
+            bonsai_exe=str(exe),
+        )
+    except OSError as e:  # unknown workflow stem
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
     output_dir.mkdir(parents=True, exist_ok=True)
-    runner = BonsaiCameraRunner(
-        workflow=resolved_workflow,
-        acqdir=str(output_dir),
-        cam_basename=session,
-        cam_index=cam_index,
-        fps=fps,
-        driver=driver,
-        bonsai_exe=str(bonsai_exe) if bonsai_exe else None,
-    )
 
     typer.echo(
         f"Test recording: cam_index={cam_index}  driver={driver}  fps={fps}  "
