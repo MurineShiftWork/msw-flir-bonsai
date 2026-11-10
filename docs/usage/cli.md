@@ -64,12 +64,18 @@ msw-flir probe-cameras --driver spinnaker --json
   `SpinnakerC_v140.dll`), loaded through ctypes in a child process. No Python
   SDK wrapper is needed. Index and serial per camera.
 - `usb`: the SDK was missing, crashed or hung. Windows PnP devices from vendor
-  `0x1E10`: count and USB serial strings, no index order.
+  `0x1E10`: count and serials, no index order. Only the parent "USB Composite
+  Device" (`USB\VID_1E10&PID_xxxx\<serial>`) counts; its serial is hex and is
+  reported in decimal, like the SDK (hex `00BC614E` is serial `12345678`).
 - `none`: neither worked; exits 1.
 
 The C library is searched in `MSW_FLIR_FC2_DLL` / `MSW_FLIR_SPIN_DLL` (full
 path), then on the DLL search path, then in the default `Program Files`
 install directories.
+
+!!! note "Spinnaker probe untested"
+    The FlyCapture2 probe is checked on Flea3 USB3 cameras. The Spinnaker probe
+    (DLL names, install folders, function calls) has not run on hardware yet.
 
 ### Naming cameras by serial
 
@@ -89,8 +95,14 @@ setup. FlyCapture launches each camera at the index the SDK reports for its
 serial; Spinnaker passes the serial to Bonsai (`cam1serial`). A serial that is
 not connected, or fewer cameras than the setup needs, refuses the start. With
 no serials configured only the count is checked. With source `none` it warns
-and launches by configured index. A Bonsai process that exits within 5 s of
-launch also fails the start (`BonsaiStartError`).
+and launches by configured index. With source `usb` serials are checked too,
+but FlyCapture keeps the configured index.
+
+A Bonsai process that exits within 5 s of launch has not recorded. Bonsai
+returns 0 in that case, so the exit is judged by time, not by return code. The
+camera can stay held for a few seconds after such an exit, so Bonsai is
+relaunched once after 3 s (`retry_delay`); a second early exit fails the start
+(`BonsaiStartError`).
 
 ### Verifying on a rig
 
@@ -98,10 +110,9 @@ launch also fails the start (`BonsaiStartError`).
    `sdk` and the serials should match the camera labels.
 2. Unplug one camera and run it again: the count drops and the remaining
    serial keeps its identity even when its index changes.
-3. List the USB serials with
+3. List the USB devices with
    `Get-PnpDevice -PresentOnly | ? InstanceId -like 'USB\VID_1E10*'` in
-   PowerShell and compare them with the SDK serials. Until they are known to
-   match, the `usb` source only checks the camera count.
+   PowerShell: the entry without `MI_` ends in the hex serial.
 
 ## run
 
@@ -152,10 +163,10 @@ msw-flir test-record [options]
 | `--output-dir` | `~/msw_flir_test` | Output directory |
 | `--session` | `test` | Session name |
 | `--cam-index`, `-c` | `0` | Camera index |
-| `--driver` | `flycap` | Camera driver |
+| `--driver`, `-d` | `flycap` | Camera driver |
 | `--fps` | `30` | Frame rate |
 | `--duration` | `5.0` | Recording duration in seconds |
-| `--bonsai-exe` | `$BONSAI_EXE` | Path to `Bonsai.exe` |
+| `--bonsai-exe` | `$BONSAI_EXE`, then the `find-bonsai` locations | Path to `Bonsai.exe` |
 | `--workflow` | auto | Override workflow stem name |
 
 **Example:**
