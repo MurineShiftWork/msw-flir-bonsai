@@ -455,6 +455,28 @@ class TestFirstFrame:
             with pytest.raises(BonsaiStartError, match="no frame"):
                 runner.check_started(timeout=0.05)
 
+    def test_monitor_quiet_before_first_frame(self, tmp_path, caplog) -> None:
+        runner = self._runner(tmp_path, retry_delay=None)
+        proc = FakeProc(0.0)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+            with pytest.raises(BonsaiStartError):
+                runner.check_started(timeout=5.0)
+        runner._monitor(cast("subprocess.Popen", proc))
+        assert runner.exited_unexpectedly
+        assert "exited unexpectedly" not in caplog.text
+
+    def test_monitor_logs_exit_after_first_frame(self, tmp_path, caplog) -> None:
+        runner = self._runner(tmp_path)
+        proc = FakeProc()
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+        _grow_avi_later(runner.avi_path, 0.0).join()
+        runner.check_started(timeout=5.0)
+        proc.exit_after = 0.0
+        runner._monitor(cast("subprocess.Popen", proc))
+        assert "exited unexpectedly" in caplog.text
+
     def test_multi_stops_all_when_one_fails(self, tmp_path) -> None:
         ok, bad = self._runner(tmp_path), self._runner(tmp_path / "b")
         (tmp_path / "b").mkdir()
