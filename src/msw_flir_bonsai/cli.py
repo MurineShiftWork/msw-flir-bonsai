@@ -283,6 +283,10 @@ def test_record(
 ) -> None:
     """Run a short test recording from a single camera to verify the setup.
 
+    The duration counts from the first frame in the video file. Exits 1 when
+    no frame arrives, Bonsai exits before the stop, or the timestamps file is
+    missing or empty.
+
     Useful for checking camera index, frame rate, and output path before
     a real session.  Duration defaults to 5 seconds.  Without --bonsai-exe or
     BONSAI_EXE, Bonsai.exe is looked up like find-bonsai.
@@ -317,12 +321,13 @@ def test_record(
         f"Test recording: cam_index={cam_index}  driver={driver}  fps={fps}  "
         f"duration={duration}s"
     )
-    t0 = time.monotonic()
     runner.start()
     exited = False
     try:
+        # the duration counts from the first frame, not from launch: Bonsai
+        # needs ~5 s to open the camera
         runner.check_started()
-        time.sleep(max(duration - (time.monotonic() - t0), 0.0))
+        time.sleep(duration)
     except BonsaiStartError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(1) from e

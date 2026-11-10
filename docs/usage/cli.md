@@ -98,11 +98,17 @@ no serials configured only the count is checked. With source `none` it warns
 and launches by configured index. With source `usb` serials are checked too,
 but FlyCapture keeps the configured index.
 
-A Bonsai process that exits within 5 s of launch has not recorded. Bonsai
-returns 0 in that case, so the exit is judged by time, not by return code. The
-camera can stay held for a few seconds after such an exit, so Bonsai is
-relaunched once after 3 s (`retry_delay`); a second early exit fails the start
-(`BonsaiStartError`).
+A camera has started when its first frame is in `<cam_basename>.avi` (the file
+has data, about 5 s after launch). The other signals mislead: Bonsai's return
+code is 0 when it finds no camera (it exits about 4 to 5 s after launch), and
+the timestamps CSV stays 0 B until its first 4 KB block, several seconds of
+frames. The start fails (`BonsaiStartError`) when Bonsai exits before the first
+frame, at any time, or when `start_timeout` (15 s) passes without one; Bonsai
+is then stopped. After an exit without a frame the camera can still be held for
+a few seconds, so Bonsai is relaunched once after 3 s (`retry_delay`), unless
+the caller passes `expect_present=False` because the probe did not see the
+camera. `MultiCameraRunner.start` waits for all cameras against one deadline
+and stops them all if one fails.
 
 ### Verifying on a rig
 
@@ -151,9 +157,10 @@ msw-flir run D:\DATA\video mouse001__20260524 --n-cameras 2 --fps 60
 ## test-record
 
 Run a short test recording from a single camera to verify the setup.
-Bonsai exits 0 even when it could not record, so the command judges the
-outcome itself: it exits 1 when Bonsai exited before the stop was requested
-(at any time) or when `<session>.timestamps.csv` is missing or empty.
+The duration counts from the first frame. Bonsai exits 0 even when it could
+not record, so the command judges the outcome itself: it exits 1 when no frame
+arrives, when Bonsai exited before the stop was requested (at any time), or
+when `<session>.timestamps.csv` is missing or empty.
 
 ```
 msw-flir test-record [options]
