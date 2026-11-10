@@ -242,6 +242,51 @@ class TestStartStop:
         assert "attempt 1 of 2" in caplog.text
         assert "attempt 2 of 2" in caplog.text
 
+    def test_start_window_is_the_default_check(self) -> None:
+        runner = BonsaiCameraRunner(
+            workflow="run-flir-flycap-1cam",
+            acqdir=_ACQDIR,
+            cam_basename=_CAM_BASENAME,
+            bonsai_exe="C:/Bonsai.exe",
+            start_window=0.05,
+            retry_delay=None,
+        )
+        proc = self._mock_process(returncode=None)
+        proc.wait.side_effect = subprocess.TimeoutExpired("bonsai", 0.05)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+        runner.check_started()
+        assert proc.wait.call_args.kwargs["timeout"] <= 0.05
+
+    def test_exited_unexpectedly(self) -> None:
+        runner = _make_runner()
+        proc = self._mock_process(returncode=None)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+        assert not runner.exited_unexpectedly
+        proc.poll.return_value = 0  # Bonsai gave up after the start window
+        assert runner.exited_unexpectedly
+
+    def test_exit_after_stop_is_expected(self) -> None:
+        runner = _make_runner()
+        proc = self._mock_process(returncode=None)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+            runner.stop()
+        proc.poll.return_value = 0
+        assert not runner.exited_unexpectedly
+
+    def test_monitor_flags_its_own_process_only(self) -> None:
+        runner = _make_runner()
+        old = self._mock_process(returncode=0)
+        new = self._mock_process(returncode=None)
+        runner._process = new
+        runner._monitor(old)  # an old thread after a relaunch
+        assert not runner._exited_unexpectedly
+        new.poll.return_value = 0
+        runner._monitor(new)
+        assert runner._exited_unexpectedly
+
     def test_early_exit_relaunch_succeeds(self) -> None:
         runner = _make_runner()
         runner._retry_delay = 0.01
@@ -482,6 +527,14 @@ class TestMultiCameraRunnerDelegation:
             multi.start()
         for r in runners:
             r.stop.assert_called_once()
+
+    def test_exited_unexpectedly_is_any(self) -> None:
+        multi, runners = self._make_multi()
+        for r in runners:
+            r.exited_unexpectedly = False
+        assert not multi.exited_unexpectedly
+        runners[1].exited_unexpectedly = True
+        assert multi.exited_unexpectedly
 
     def test_stop_calls_all(self) -> None:
         multi, runners = self._make_multi()

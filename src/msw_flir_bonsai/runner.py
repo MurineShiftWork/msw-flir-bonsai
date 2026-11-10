@@ -39,6 +39,9 @@ _STARTUP_TIMEOUT = 30.0
 # A Bonsai process that exits this soon after launch never recorded: the
 # camera is missing or busy, or the workflow failed to load. Bonsai returns 0
 # in these cases, so an early exit is judged by time, not by return code.
+# Provisional: Bonsai can take longer than this to give up on a camera. The
+# plan is to judge a start by the first frame written, pending rig timing
+# measurements; until then callers also check exited_unexpectedly.
 _EARLY_EXIT_S = 5.0
 # After an early exit the driver can hold the camera for a moment; a relaunch
 # straight away fails the same way.
@@ -82,6 +85,9 @@ class BonsaiCameraRunner:
         driver: ``"flycap"`` or ``"spinnaker"``: controls which properties are passed.
         extra_props: Additional ``-p key=value`` pairs forwarded to Bonsai CLI.
         startup_timeout: Seconds to wait for the subprocess to start before raising.
+        start_window: Seconds after launch within which an exit counts as a
+            failed start (:meth:`check_started`). Provisional, see
+            ``_EARLY_EXIT_S``.
         retry_delay: Seconds to wait before the single relaunch after an early
             exit (:meth:`check_started`); None disables the relaunch.
     """
@@ -98,6 +104,7 @@ class BonsaiCameraRunner:
         bonsai_exe: str | Path | None = None,
         extra_props: dict[str, str] | None = None,
         startup_timeout: float = _STARTUP_TIMEOUT,
+        start_window: float = _EARLY_EXIT_S,
         retry_delay: float | None = _EARLY_EXIT_RETRY_DELAY_S,
     ) -> None:
         self._bonsai_exe = _find_bonsai_exe(bonsai_exe)
@@ -110,7 +117,9 @@ class BonsaiCameraRunner:
         self._driver = driver
         self._extra_props = extra_props or {}
         self._startup_timeout = startup_timeout
+        self._start_window = start_window
         self._retry_delay = retry_delay
+        self._exited_unexpectedly = False
 
         self._process: subprocess.Popen | None = None
         self._monitor_thread: threading.Thread | None = None
@@ -179,6 +188,7 @@ class BonsaiCameraRunner:
         logging.info(f"[BonsaiCamera cam{self._cam_index}] Starting: {' '.join(cmd)}")
 
         self._stopped.clear()
+        self._exited_unexpectedly = False
         # Graceful stop: Extensions/key-ctrl-stop.bonsai polls this file and
         # completes the stream once it exists, so the AVI/CSV writers flush and
         # close and Bonsai exits.
@@ -204,6 +214,7 @@ class BonsaiCameraRunner:
         self._started_at = time.monotonic()
         self._monitor_thread = threading.Thread(
             target=self._monitor,
+            args=(self._process,),
             daemon=True,
             name=f"bonsai-cam{self._cam_index}-monitor",
         )
@@ -213,7 +224,7 @@ class BonsaiCameraRunner:
             f"(pid={self._process.pid})"
         )
 
-    def check_started(self, within: float = _EARLY_EXIT_S) -> None:
+    def check_started(self, within: float | None = None) -> None:
         """Block until ``within`` seconds after :meth:`start`; raise if Bonsai exited.
 
         Bonsai exits 0 when its camera is missing or still held, so the return
@@ -224,9 +235,12 @@ class BonsaiCameraRunner:
         Raises:
             BonsaiStartError: The process exited within ``within`` seconds,
                 on the relaunch too (or with the relaunch disabled).
+                ``within`` defaults to ``start_window``.
         """
         if self._process is None:
             return
+        if within is None:
+            within = self._start_window
         rc = self._wait_early_exit(within)
         if rc is None:
             return
@@ -258,13 +272,17 @@ class BonsaiCameraRunner:
         except subprocess.TimeoutExpired:
             return None
 
-    def _monitor(self) -> None:
-        """Poll the subprocess in a daemon thread and log unexpected exits."""
-        assert self._process is not None
-        while not self._stopped.is_set():
-            rc = self._process.poll()
+    def _monitor(self, proc: subprocess.Popen) -> None:
+        """Poll ``proc`` in a daemon thread and record an exit before stop.
+
+        Takes the process it watches: after a relaunch the old thread must not
+        flag the new process.
+        """
+        while not self._stopped.is_set() and proc is self._process:
+            rc = proc.poll()
             if rc is not None:
-                if not self._stopped.is_set():
+                if not self._stopped.is_set() and proc is self._process:
+                    self._exited_unexpectedly = True
                     logging.error(
                         f"[BonsaiCamera cam{self._cam_index}] "
                         f"Process exited unexpectedly (returncode={rc})"
@@ -309,6 +327,21 @@ class BonsaiCameraRunner:
             return self._process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             return None
+
+    @property
+    def exited_unexpectedly(self) -> bool:
+        """True if Bonsai exited before :meth:`stop` was requested.
+
+        Bonsai exits 0 when it cannot record, so this, not the return code,
+        tells a caller that the recording failed. Check it before :meth:`stop`.
+        """
+        if self._exited_unexpectedly:
+            return True
+        return (
+            self._process is not None
+            and not self._stopped.is_set()
+            and self._process.poll() is not None
+        )
 
     @property
     def is_running(self) -> bool:
@@ -375,11 +408,12 @@ class MultiCameraRunner:
         ]
         return cls(runners)
 
-    def start(self, check_s: float = _EARLY_EXIT_S) -> None:
+    def start(self, check_s: float | None = None) -> None:
         """Start all camera subprocesses, then check none exited early.
 
-        The check waits ``check_s`` seconds once for all cameras (each is
-        measured from its own launch). ``check_s=0`` skips it.
+        The check waits ``check_s`` seconds (default: each runner's
+        ``start_window``) once for all cameras, each measured from its own
+        launch. ``check_s=0`` skips it.
 
         Raises:
             BonsaiStartError: A camera exited within ``check_s``; all cameras
@@ -387,7 +421,7 @@ class MultiCameraRunner:
         """
         for runner in self._runners:
             runner.start()
-        if check_s <= 0:
+        if check_s is not None and check_s <= 0:
             return
         failed = []
         for runner in self._runners:
@@ -415,6 +449,11 @@ class MultiCameraRunner:
     def all_running(self) -> bool:
         """True if every camera subprocess is still active."""
         return all(r.is_running for r in self._runners)
+
+    @property
+    def exited_unexpectedly(self) -> bool:
+        """True if any camera's Bonsai exited before stop was requested."""
+        return any(r.exited_unexpectedly for r in self._runners)
 
     @property
     def any_running(self) -> bool:
