@@ -37,8 +37,12 @@ _BONSAI_EXE_ENV = "BONSAI_EXE"
 _STARTUP_POLL_INTERVAL = 0.5
 _STARTUP_TIMEOUT = 30.0
 # A Bonsai process that exits this soon after launch never recorded: the
-# camera is missing or busy, or the workflow failed to load.
+# camera is missing or busy, or the workflow failed to load. Bonsai returns 0
+# in these cases, so an early exit is judged by time, not by return code.
 _EARLY_EXIT_S = 5.0
+# After an early exit the driver can hold the camera for a moment; a relaunch
+# straight away fails the same way.
+_EARLY_EXIT_RETRY_DELAY_S = 3.0
 
 
 class BonsaiStartError(RuntimeError):
@@ -78,6 +82,8 @@ class BonsaiCameraRunner:
         driver: ``"flycap"`` or ``"spinnaker"``: controls which properties are passed.
         extra_props: Additional ``-p key=value`` pairs forwarded to Bonsai CLI.
         startup_timeout: Seconds to wait for the subprocess to start before raising.
+        retry_delay: Seconds to wait before the single relaunch after an early
+            exit (:meth:`check_started`); None disables the relaunch.
     """
 
     def __init__(
@@ -92,6 +98,7 @@ class BonsaiCameraRunner:
         bonsai_exe: str | Path | None = None,
         extra_props: dict[str, str] | None = None,
         startup_timeout: float = _STARTUP_TIMEOUT,
+        retry_delay: float | None = _EARLY_EXIT_RETRY_DELAY_S,
     ) -> None:
         self._bonsai_exe = _find_bonsai_exe(bonsai_exe)
         self._workflow_path = workflow_path(workflow)
@@ -103,6 +110,7 @@ class BonsaiCameraRunner:
         self._driver = driver
         self._extra_props = extra_props or {}
         self._startup_timeout = startup_timeout
+        self._retry_delay = retry_delay
 
         self._process: subprocess.Popen | None = None
         self._monitor_thread: threading.Thread | None = None
@@ -208,23 +216,47 @@ class BonsaiCameraRunner:
     def check_started(self, within: float = _EARLY_EXIT_S) -> None:
         """Block until ``within`` seconds after :meth:`start`; raise if Bonsai exited.
 
-        Bonsai exits 0 when its camera is missing, so a clean return code does
-        not mean it recorded; any exit this early is a failed start.
+        Bonsai exits 0 when its camera is missing or still held, so the return
+        code says nothing; any exit this early is a failed start. The first
+        early exit is logged and Bonsai is relaunched once after
+        ``retry_delay`` seconds, because the camera may not be released yet.
 
         Raises:
-            BonsaiStartError: The process exited within ``within`` seconds.
+            BonsaiStartError: The process exited within ``within`` seconds,
+                on the relaunch too (or with the relaunch disabled).
         """
         if self._process is None:
             return
-        remaining = self._started_at + within - time.monotonic()
-        try:
-            rc = self._process.wait(timeout=max(remaining, 0.0))
-        except subprocess.TimeoutExpired:
+        rc = self._wait_early_exit(within)
+        if rc is None:
             return
-        raise BonsaiStartError(
+        msg = (
             f"Bonsai cam{self._cam_index} exited within {within:g} s of launch "
             f"(returncode={rc}): camera missing or in use, or the workflow failed"
         )
+        if self._retry_delay is None:
+            raise BonsaiStartError(msg)
+        logging.warning(
+            f"[BonsaiCamera cam{self._cam_index}] {msg}; attempt 1 of 2, "
+            f"relaunching in {self._retry_delay:g} s"
+        )
+        time.sleep(self._retry_delay)
+        self.start()
+        rc = self._wait_early_exit(within)
+        if rc is None:
+            logging.info(f"[BonsaiCamera cam{self._cam_index}] Relaunch running")
+            return
+        logging.error(f"[BonsaiCamera cam{self._cam_index}] {msg}; attempt 2 of 2")
+        raise BonsaiStartError(f"{msg} (after one relaunch)")
+
+    def _wait_early_exit(self, within: float) -> int | None:
+        """Return code if the process exits within ``within`` s of start, else None."""
+        assert self._process is not None
+        remaining = self._started_at + within - time.monotonic()
+        try:
+            return self._process.wait(timeout=max(remaining, 0.0))
+        except subprocess.TimeoutExpired:
+            return None
 
     def _monitor(self) -> None:
         """Poll the subprocess in a daemon thread and log unexpected exits."""
