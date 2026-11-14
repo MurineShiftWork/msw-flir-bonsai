@@ -28,6 +28,9 @@ msw-flir = "msw_flir_bonsai.cli:main"
 [project.entry-points."msw.cli"]
 flir = "msw_flir_bonsai.cli:register"
 
+[project.entry-points."msw.camera"]
+flir_bonsai = "msw_flir_bonsai.msw:FlirBonsaiBackend"
+
 [project.urls]
 Homepage = "https://github.com/MurineShiftWork/msw-flir-bonsai"
 Documentation = "https://MurineShiftWork.github.io/msw-flir-bonsai/"
