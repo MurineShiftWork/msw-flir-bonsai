@@ -14,8 +14,9 @@ classifiers = [
 authors = [
     { name = "Lars B. Rollik", email = "lars@rollik.me" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
+    "msw-plugin-api>=0.4.0",
     "numpy",
     "pandas",
     "typer",
@@ -26,6 +27,9 @@ msw-flir = "msw_flir_bonsai.cli:main"
 
 [project.entry-points."msw.cli"]
 flir = "msw_flir_bonsai.cli:register"
+
+[project.entry-points."msw.camera"]
+flir_bonsai = "msw_flir_bonsai.msw:FlirBonsaiBackend"
 
 [project.urls]
 Homepage = "https://github.com/MurineShiftWork/msw-flir-bonsai"
