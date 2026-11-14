@@ -272,6 +272,40 @@ def test_preflight_fewer_cameras_than_units() -> None:
     assert "index 1" in res["back"].error
 
 
+def test_preflight_reports_probe_serial_without_hw_id() -> None:
+    backend = _backend(_sdk("12345678", "87654321"))
+    backend.configure({}, _units(("top", 0, ""), ("back", 1, "")))
+    res = _by_name(backend.preflight())
+    assert res["top"].extra == {"probe": "sdk", "serial": "12345678", "index": 0}
+    assert res["back"].extra == {"probe": "sdk", "serial": "87654321", "index": 1}
+
+
+def _usb(*serials: str) -> ProbeResult:
+    cams = [CameraInfo(index=None, serial=s) for s in serials]
+    return ProbeResult("flycap", source="usb", count=len(cams), cameras=cams)
+
+
+def test_preflight_usb_probe_without_hw_id_lists_probe_serials() -> None:
+    backend = _backend(_usb("12345678", "87654321"))
+    backend.configure({}, _units(("top", 0, ""), ("back", 1, "")))
+    res = _by_name(backend.preflight())
+    for name, index in (("top", 0), ("back", 1)):
+        assert res[name].extra == {
+            "probe": "usb",
+            "probe_serials": ["12345678", "87654321"],
+            "index": index,
+        }
+
+
+def test_preflight_usb_probe_reports_serial_matched_by_hw_id() -> None:
+    backend = _backend(_usb("12345678", "87654321"))
+    backend.configure({}, _units(("top", 0, "012345678"), ("back", 1, "")))
+    res = _by_name(backend.preflight())
+    assert res["top"].extra["serial"] == "012345678"
+    assert "serial" not in res["back"].extra
+    assert res["back"].extra["probe_serials"] == ["12345678", "87654321"]
+
+
 @pytest.mark.parametrize("raises", [False, True])
 def test_preflight_probe_unavailable_launches_by_index(raises: bool) -> None:
     def probe(driver: str) -> ProbeResult:

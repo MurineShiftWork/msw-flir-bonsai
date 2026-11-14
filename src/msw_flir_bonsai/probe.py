@@ -488,8 +488,8 @@ def _norm(serial: object) -> str:
     return str(serial or "").strip()
 
 
-def _serial_key(serial: str) -> str:
-    # setup serials are decimal; tolerate leading zeros
+def serial_key(serial: str) -> str:
+    """Comparable form of a serial: decimal serials without leading zeros."""
     return str(int(serial)) if serial.isdigit() else serial
 
 
@@ -547,11 +547,9 @@ def resolve_camera_units(
     if probe.source == "usb":
         if count < len(plan):
             raise CameraMismatchError(f"setup needs {len(plan)} camera(s); {label}")
-        found_usb = {_serial_key(c.serial) for c in probe.cameras}
+        found_usb = {serial_key(c.serial) for c in probe.cameras}
         missing = [
-            c.serial
-            for c in plan
-            if c.serial and _serial_key(c.serial) not in found_usb
+            c.serial for c in plan if c.serial and serial_key(c.serial) not in found_usb
         ]
         if missing:
             raise CameraMismatchError(
@@ -563,12 +561,12 @@ def resolve_camera_units(
         return _finish(plan, pass_serial)
 
     by_serial = {
-        _serial_key(c.serial): c.index
+        serial_key(c.serial): c.index
         for c in probe.cameras
         if c.serial and c.index is not None
     }
     missing = [
-        c.serial for c in plan if c.serial and _serial_key(c.serial) not in by_serial
+        c.serial for c in plan if c.serial and serial_key(c.serial) not in by_serial
     ]
     if missing:
         raise CameraMismatchError(
@@ -576,7 +574,7 @@ def resolve_camera_units(
         )
     for c in plan:
         if c.serial:
-            c.index = by_serial[_serial_key(c.serial)]
+            c.index = by_serial[serial_key(c.serial)]
         elif c.index >= count:
             raise CameraMismatchError(
                 f"camera {c.name or c.index!r} has no serial and index {c.index} "

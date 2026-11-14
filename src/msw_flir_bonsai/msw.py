@@ -16,7 +16,11 @@ Mechanism:
 - ``preflight`` probes the connected cameras (:func:`probe_cameras`) and
   resolves each camera's launch index (and, for Spinnaker, its serial) with
   :func:`resolve_camera_units`. A camera whose serial is not connected, or for
-  which no camera is left, is ``missing`` and never launched.
+  which no camera is left, is ``missing`` and never launched. ``extra["serial"]``
+  is the serial the probe reports at the resolved index, also for cameras
+  without ``hw_id``, so the setup can be filled in from it. A probe without
+  index order (USB) only confirms configured serials, and lists what it found
+  as ``extra["probe_serials"]`` on every camera.
 - ``start`` launches one Bonsai process per ready camera with the 1-cam
   workflow and judges each by its first frame
   (:meth:`BonsaiCameraRunner.check_started`), in parallel.
@@ -74,6 +78,7 @@ from msw_flir_bonsai.probe import (
     ProbeResult,
     probe_cameras,
     resolve_camera_units,
+    serial_key,
 )
 from msw_flir_bonsai.runner import (
     BONSAI_SEARCH_PATHS,
@@ -279,6 +284,7 @@ class FlirBonsaiBackend:
         self._bonsai_exe = ""
         self._units: list[FlirUnit] = []
         self._plan: dict[str, CameraLaunch] = {}
+        self._serials: dict[str, str] = {}
         self._preflight: dict[str, UnitResult] | None = None
         self._runners: dict[str, Any] = {}
         self._files: dict[str, list[str]] = {}
@@ -302,6 +308,7 @@ class FlirBonsaiBackend:
         self._units = parse_units(list(units), self._settings.n_cameras)
         self._bonsai_exe = resolve_bonsai_exe(self._settings.bonsai_exe)
         self._plan = {}
+        self._serials = {}
         self._preflight = None
         self._results = {}
         self._stopped = None
@@ -310,8 +317,9 @@ class FlirBonsaiBackend:
         """Probe the cameras and resolve each one's launch index.
 
         Returns:
-            Per camera ``ready`` (``extra``: serial, resolved index, probe
-            source) or ``missing`` (the probe message as ``error``); every
+            Per camera ``ready`` (``extra``: probe source, resolved index,
+            serial, and ``probe_serials`` when the probe has no index order)
+            or ``missing`` (the probe message as ``error``); every
             camera ``failed`` (``bonsai_not_found``) when ``Bonsai.exe`` is gone.
         """
         driver = self._settings.driver
@@ -319,6 +327,7 @@ class FlirBonsaiBackend:
             error = f"Bonsai.exe not found: {self._bonsai_exe!r}"
             log.error(f"flir_bonsai: {error}")
             self._plan = {}
+            self._serials = {}
             gone = {
                 u.name: UnitResult(
                     name=u.name,
@@ -337,12 +346,27 @@ class FlirBonsaiBackend:
         except Exception as e:  # noqa: BLE001  the probe must not break a run
             probe = ProbeResult(driver, error=f"probe raised {e!r}")
         source = probe.source if probe.source != "none" else "unavailable"
+        at_index = {
+            c.index: c.serial for c in probe.cameras if c.index is not None and c.serial
+        }
+        unordered = [c.serial for c in probe.cameras if c.index is None and c.serial]
+        unordered_keys = {serial_key(s) for s in unordered}
         self._plan = {}
+        self._serials = {}
         results: dict[str, UnitResult] = {}
         for unit, launch, error in self._resolve(probe):
             extra: dict[str, Any] = {"probe": source}
-            if unit.serial:
-                extra["serial"] = unit.serial
+            serial = unit.serial
+            if probe.source != "none":
+                if launch is not None and launch.index in at_index:
+                    serial = at_index[launch.index]
+                elif unordered:
+                    if serial_key(unit.serial) not in unordered_keys:
+                        serial = ""
+                    extra["probe_serials"] = list(unordered)
+            if serial:
+                extra["serial"] = serial
+                self._serials[unit.name] = serial
             if launch is None:
                 results[unit.name] = UnitResult(
                     name=unit.name,
@@ -589,8 +613,9 @@ class FlirBonsaiBackend:
 
     def _extra(self, unit: FlirUnit, launch: CameraLaunch) -> dict[str, Any]:
         extra: dict[str, Any] = {"index": launch.index}
-        if unit.serial:
-            extra["serial"] = unit.serial
+        serial = self._serials.get(unit.name, unit.serial)
+        if serial:
+            extra["serial"] = serial
         return extra
 
     def _existing_files(self, name: str) -> list[str]:
