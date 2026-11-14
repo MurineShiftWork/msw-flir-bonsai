@@ -140,11 +140,13 @@ cameras:
     settings: {driver: flycap, bonsai_exe: C:\Bonsai\Bonsai.exe}
 ```
 
-- **Settings:** `driver` (`flycap` or `spinnaker`), `bonsai_exe` (else `BONSAI_EXE`),
-  `workflow` (default `run-flir-<driver>-1cam`) and `n_cameras` (cameras `cam0..`
-  when no units are listed). Per camera: `index` and the optional serial as `hw_id`.
-  Unknown keys are a configuration error.
-- **Preflight** probes the connected cameras. A camera whose serial is not connected,
+- **Settings:** `driver` (`flycap` or `spinnaker`), `bonsai_exe` (else `BONSAI_EXE`,
+  else the `find-bonsai` locations), `workflow` (default `run-flir-<driver>-1cam`) and
+  `n_cameras` (cameras `cam0..` when no units are listed). Per camera: `index` and the
+  optional serial as `hw_id`. Unknown keys, and a `Bonsai.exe` that does not resolve,
+  are a configuration error.
+- **Preflight** reports every camera `failed` (`bonsai_not_found`) when `Bonsai.exe`
+  has gone since configuration. It probes the connected cameras. A camera whose serial is not connected,
   or which has no camera left, is `missing` and never launched; FlyCapture launches
   at the serial's SDK index, Spinnaker by serial. Without a probe answer every camera
   is launched by its configured index.

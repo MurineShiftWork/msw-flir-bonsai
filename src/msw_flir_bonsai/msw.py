@@ -8,6 +8,11 @@ recording, ``close`` at the end. Every call that touches cameras returns one
 
 Mechanism:
 
+- ``configure`` resolves ``Bonsai.exe`` (:func:`resolve_bonsai_exe`): the
+  ``bonsai_exe`` setting, else ``BONSAI_EXE``, else the known install
+  locations. A group with no Bonsai fails at setup load, before any camera
+  is touched; if it disappears later, ``preflight`` reports every camera
+  ``failed`` (``bonsai_not_found``).
 - ``preflight`` probes the connected cameras (:func:`probe_cameras`) and
   resolves each camera's launch index (and, for Spinnaker, its serial) with
   :func:`resolve_camera_units`. A camera whose serial is not connected, or for
@@ -42,6 +47,7 @@ Where to start reading: :class:`FlirBonsaiBackend`.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,7 +75,12 @@ from msw_flir_bonsai.probe import (
     probe_cameras,
     resolve_camera_units,
 )
-from msw_flir_bonsai.runner import BonsaiCameraRunner, BonsaiStartError
+from msw_flir_bonsai.runner import (
+    BONSAI_SEARCH_PATHS,
+    BonsaiCameraRunner,
+    BonsaiStartError,
+    discover_bonsai,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -89,7 +100,8 @@ class FlirSettings:
 
     Attributes:
         driver: ``"flycap"`` or ``"spinnaker"``.
-        bonsai_exe: Path to ``Bonsai.exe``; empty uses the ``BONSAI_EXE`` env var.
+        bonsai_exe: Path to ``Bonsai.exe``; empty uses the ``BONSAI_EXE`` env
+            var, else the first known install location.
         workflow: Workflow stem; ``run-flir-<driver>-1cam`` when not set.
         n_cameras: Number of default cameras (``cam0``, ``cam1``, ...) when the
             group lists no units.
@@ -204,6 +216,34 @@ def parse_units(units: list[CameraUnitSpec], n_cameras: int) -> list[FlirUnit]:
     return parsed
 
 
+def resolve_bonsai_exe(bonsai_exe: str) -> str:
+    """The ``Bonsai.exe`` a group launches.
+
+    The ``bonsai_exe`` setting when set, else the ``BONSAI_EXE`` env var, else
+    the first known install location (as ``msw-flir find-bonsai`` reports it).
+
+    Raises:
+        CameraConfigError: ``bonsai_exe`` is set and does not exist, or it is
+            unset and neither ``BONSAI_EXE`` nor a known location resolves.
+    """
+    if bonsai_exe:
+        if not Path(bonsai_exe).is_file():
+            raise CameraConfigError(f"bonsai_exe {bonsai_exe!r} does not exist")
+        return bonsai_exe
+    env = os.environ.get("BONSAI_EXE", "").strip()
+    if env and Path(env).is_file():
+        return env
+    found = discover_bonsai()
+    if found is not None:
+        return str(found)
+    searched = ", ".join(str(p) for p in BONSAI_SEARCH_PATHS)
+    env_note = f" (BONSAI_EXE={env!r} does not exist)" if env else ""
+    raise CameraConfigError(
+        f"Bonsai.exe not found{env_note}: set bonsai_exe in the camera settings "
+        f"or the BONSAI_EXE env var; searched {searched}"
+    )
+
+
 @dataclass
 class _ProbeUnit:
     """The shape :func:`resolve_camera_units` reads."""
@@ -236,6 +276,7 @@ class FlirBonsaiBackend:
         self._probe = probe or (lambda d: probe_cameras(d, timeout=_PROBE_TIMEOUT_S))
         self._runner_factory = runner_factory or BonsaiCameraRunner
         self._settings = FlirSettings()
+        self._bonsai_exe = ""
         self._units: list[FlirUnit] = []
         self._plan: dict[str, CameraLaunch] = {}
         self._preflight: dict[str, UnitResult] | None = None
@@ -254,10 +295,12 @@ class FlirBonsaiBackend:
         """Validate and store the settings and cameras.
 
         Raises:
-            CameraConfigError: Unknown or invalid settings, or invalid cameras.
+            CameraConfigError: Unknown or invalid settings, invalid cameras, or
+                no ``Bonsai.exe`` (:func:`resolve_bonsai_exe`).
         """
         self._settings = parse_settings(settings)
         self._units = parse_units(list(units), self._settings.n_cameras)
+        self._bonsai_exe = resolve_bonsai_exe(self._settings.bonsai_exe)
         self._plan = {}
         self._preflight = None
         self._results = {}
@@ -268,9 +311,27 @@ class FlirBonsaiBackend:
 
         Returns:
             Per camera ``ready`` (``extra``: serial, resolved index, probe
-            source) or ``missing`` (the probe message as ``error``).
+            source) or ``missing`` (the probe message as ``error``); every
+            camera ``failed`` (``bonsai_not_found``) when ``Bonsai.exe`` is gone.
         """
         driver = self._settings.driver
+        if not Path(self._bonsai_exe).is_file():
+            error = f"Bonsai.exe not found: {self._bonsai_exe!r}"
+            log.error(f"flir_bonsai: {error}")
+            self._plan = {}
+            gone = {
+                u.name: UnitResult(
+                    name=u.name,
+                    ok=False,
+                    state=UNIT_FAILED,
+                    error=error,
+                    error_code="bonsai_not_found",
+                )
+                for u in self._units
+            }
+            self._preflight = gone
+            self._results = dict(gone)
+            return self._ordered(gone)
         try:
             probe = self._probe(driver)
         except Exception as e:  # noqa: BLE001  the probe must not break a run
@@ -343,8 +404,8 @@ class FlirBonsaiBackend:
     def start(self, target: CameraTarget) -> list[UnitResult]:
         """Launch one Bonsai per ready camera and wait for each first frame.
 
-        Runs :meth:`preflight` first if it has not run. Missing cameras are not
-        launched and stay ``missing``.
+        Runs :meth:`preflight` first if it has not run. Cameras that failed
+        preflight are not launched and keep their preflight result.
 
         Returns:
             Per camera ``recording``, ``failed`` (no first frame, or the launch
@@ -362,7 +423,7 @@ class FlirBonsaiBackend:
         self._stopped = None
         self._files = {}
         results: dict[str, UnitResult] = {
-            name: r for name, r in self._preflight.items() if r.state == UNIT_MISSING
+            name: r for name, r in self._preflight.items() if not r.ok
         }
         s = self._settings
         to_check: dict[str, Any] = {}
@@ -381,7 +442,7 @@ class FlirBonsaiBackend:
                     cam_index=launch.index,
                     driver=s.driver,
                     cam_serial=launch.serial,
-                    bonsai_exe=s.bonsai_exe or None,
+                    bonsai_exe=self._bonsai_exe,
                 )
                 runner.start()
             except Exception as e:  # noqa: BLE001  one camera must not stop the rest

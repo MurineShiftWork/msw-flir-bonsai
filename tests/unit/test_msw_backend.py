@@ -82,6 +82,16 @@ class FakeFactory:
         return r
 
 
+@pytest.fixture(autouse=True)
+def bonsai_exe(tmp_path_factory: pytest.TempPathFactory, monkeypatch) -> Path:
+    """A Bonsai.exe found through ``BONSAI_EXE``; no known install location."""
+    exe: Path = tmp_path_factory.mktemp("bonsai") / "Bonsai.exe"
+    exe.touch()
+    monkeypatch.setenv("BONSAI_EXE", str(exe))
+    monkeypatch.setattr("msw_flir_bonsai.runner.BONSAI_SEARCH_PATHS", [])
+    return exe
+
+
 def _units(*specs: tuple[str, int, str]) -> list[CameraUnitSpec]:
     return [CameraUnitSpec(name=n, hw_id=s, settings={"index": i}) for n, i, s in specs]
 
@@ -170,6 +180,64 @@ def test_configure_rejects_bad_settings(settings: dict, match: str) -> None:
 def test_configure_rejects_bad_units(units: list, match: str) -> None:
     with pytest.raises(CameraConfigError, match=match):
         FlirBonsaiBackend().configure({}, units)
+
+
+def test_configure_rejects_a_missing_bonsai_exe(tmp_path: Path) -> None:
+    missing = tmp_path / "nope" / "Bonsai.exe"
+    with pytest.raises(CameraConfigError, match="does not exist"):
+        FlirBonsaiBackend().configure({"bonsai_exe": str(missing)}, [])
+
+
+def test_configure_without_any_bonsai(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("BONSAI_EXE")
+    with pytest.raises(CameraConfigError, match="Bonsai.exe not found"):
+        FlirBonsaiBackend().configure({}, [])
+    monkeypatch.setenv("BONSAI_EXE", str(tmp_path / "gone.exe"))
+    with pytest.raises(CameraConfigError, match="BONSAI_EXE=.*does not exist"):
+        FlirBonsaiBackend().configure({}, [])
+
+
+def test_bonsai_exe_resolution_order(
+    monkeypatch, tmp_path: Path, bonsai_exe: Path
+) -> None:
+    setting = tmp_path / "setting" / "Bonsai.exe"
+    setting.parent.mkdir()
+    setting.touch()
+    known = tmp_path / "known" / "Bonsai.exe"
+    known.parent.mkdir()
+    known.touch()
+    monkeypatch.setattr("msw_flir_bonsai.runner.BONSAI_SEARCH_PATHS", [known])
+
+    def launched(settings: dict) -> str:
+        factory = FakeFactory()
+        backend = _backend(_sdk("1"), factory)
+        backend.configure(settings, _units(("top", 0, "")))
+        backend.start(_target(tmp_path))
+        backend.close()
+        return str(factory.runners["top"].kwargs["bonsai_exe"])
+
+    assert launched({"bonsai_exe": str(setting)}) == str(setting)
+    assert launched({}) == str(bonsai_exe)
+    monkeypatch.delenv("BONSAI_EXE")
+    assert launched({}) == str(known)
+
+
+def test_bonsai_gone_after_configure_fails_every_camera(
+    tmp_path: Path, bonsai_exe: Path
+) -> None:
+    factory = FakeFactory()
+    backend = _backend(_sdk("1", "2"), factory)
+    backend.configure({}, _units(("top", 0, ""), ("back", 1, "")))
+    bonsai_exe.unlink()
+    results = backend.preflight()
+    assert [(r.name, r.ok, r.state, r.error_code) for r in results] == [
+        ("top", False, "failed", "bonsai_not_found"),
+        ("back", False, "failed", "bonsai_not_found"),
+    ]
+    started = backend.start(_target(tmp_path))
+    assert [r.error_code for r in started] == ["bonsai_not_found"] * 2
+    assert factory.runners == {}
+    assert [r.state for r in backend.stop("end")] == ["failed", "failed"]
 
 
 # ---------------------------------------------------------------------------
