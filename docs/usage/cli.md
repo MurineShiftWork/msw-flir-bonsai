@@ -42,6 +42,84 @@ FlyCapture2: 2 camera(s) found
 
 The index shown is the value to pass as `cameras.cam_index` or `--cam-index`.
 
+## probe-cameras
+
+Print the index and serial of each connected camera without opening it, so a
+setup can name its cameras by serial instead of by enumeration index.
+
+```
+msw-flir probe-cameras --driver flycap
+msw-flir probe-cameras --driver spinnaker --json
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--driver`, `-d` | `flycap` | `flycap` or `spinnaker` |
+| `--json` | off | Print `{driver, source, count, cameras: [{index, serial}], error}` |
+| `--timeout` | `10` | Seconds before the SDK probe is killed |
+
+`source` says where the answer came from:
+
+- `sdk`: the FlyCapture2 or Spinnaker C library (`FlyCapture2_C.dll`,
+  `SpinnakerC_v140.dll`), loaded through ctypes in a child process. No Python
+  SDK wrapper is needed. Index and serial per camera.
+- `usb`: the SDK was missing, crashed or hung. Windows PnP devices from vendor
+  `0x1E10`: count and serials, no index order. Only the parent "USB Composite
+  Device" (`USB\VID_1E10&PID_xxxx\<serial>`) counts; its serial is hex and is
+  reported in decimal, like the SDK (hex `00BC614E` is serial `12345678`).
+- `none`: neither worked; exits 1.
+
+The C library is searched in `MSW_FLIR_FC2_DLL` / `MSW_FLIR_SPIN_DLL` (full
+path), then on the DLL search path, then in the default `Program Files`
+install directories.
+
+!!! note "Spinnaker probe untested"
+    The FlyCapture2 probe is checked on Flea3 USB3 cameras. The Spinnaker probe
+    (DLL names, install folders, function calls) has not run on hardware yet.
+
+### Naming cameras by serial
+
+Add `serial` to each camera in the setup YAML (msw-core `CameraUnit`):
+
+```yaml
+cameras:
+  backend: flir_bonsai
+  driver: flycap
+  cameras:
+    - {index: 0, name: top, serial: "12345678"}
+    - {index: 1, name: side, serial: "87654321"}
+```
+
+Before Bonsai starts, `resolve_camera_units` checks the probe against the
+setup. FlyCapture launches each camera at the index the SDK reports for its
+serial; Spinnaker passes the serial to Bonsai (`cam1serial`). A serial that is
+not connected, or fewer cameras than the setup needs, refuses the start. With
+no serials configured only the count is checked. With source `none` it warns
+and launches by configured index. With source `usb` serials are checked too,
+but FlyCapture keeps the configured index.
+
+A camera has started when its first frame is in `<cam_basename>.avi` (the file
+has data, about 5 s after launch). The other signals mislead: Bonsai's return
+code is 0 when it finds no camera (it exits about 4 to 5 s after launch), and
+the timestamps CSV stays 0 B until its first 4 KB block, several seconds of
+frames. The start fails (`BonsaiStartError`) when Bonsai exits before the first
+frame, at any time, or when `start_timeout` (15 s) passes without one; Bonsai
+is then stopped. After an exit without a frame the camera can still be held for
+a few seconds, so Bonsai is relaunched once after 3 s (`retry_delay`), unless
+the caller passes `expect_present=False` because the probe did not see the
+camera. `MultiCameraRunner.start` waits for all cameras against one deadline
+and stops them all if one fails.
+
+### Verifying on a rig
+
+1. `msw flir probe-cameras -d flycap` (and `-d spinnaker`): `source` should be
+   `sdk` and the serials should match the camera labels.
+2. Unplug one camera and run it again: the count drops and the remaining
+   serial keeps its identity even when its index changes.
+3. List the USB devices with
+   `Get-PnpDevice -PresentOnly | ? InstanceId -like 'USB\VID_1E10*'` in
+   PowerShell: the entry without `MI_` ends in the hex serial.
+
 ## run
 
 Launch N independent Bonsai camera subprocesses (one per camera index).
@@ -79,6 +157,10 @@ msw-flir run D:\DATA\video mouse001__20260524 --n-cameras 2 --fps 60
 ## test-record
 
 Run a short test recording from a single camera to verify the setup.
+The duration counts from the first frame. Bonsai exits 0 even when it could
+not record, so the command judges the outcome itself: it exits 1 when no frame
+arrives, when Bonsai exited before the stop was requested (at any time), or
+when `<session>.timestamps.csv` is missing or empty.
 
 ```
 msw-flir test-record [options]
@@ -91,10 +173,10 @@ msw-flir test-record [options]
 | `--output-dir` | `~/msw_flir_test` | Output directory |
 | `--session` | `test` | Session name |
 | `--cam-index`, `-c` | `0` | Camera index |
-| `--driver` | `flycap` | Camera driver |
+| `--driver`, `-d` | `flycap` | Camera driver |
 | `--fps` | `30` | Frame rate |
 | `--duration` | `5.0` | Recording duration in seconds |
-| `--bonsai-exe` | `$BONSAI_EXE` | Path to `Bonsai.exe` |
+| `--bonsai-exe` | `$BONSAI_EXE`, then the `find-bonsai` locations | Path to `Bonsai.exe` |
 | `--workflow` | auto | Override workflow stem name |
 
 **Example:**

@@ -26,6 +26,7 @@ Each 1-cam workflow exposes these properties, settable via `Bonsai.exe --start -
 | `basepath` | string | all | Root output directory |
 | `session` | string | all | Session base name |
 | `cam1idx` | int | all | Camera index (0-based) |
+| `cam1serial` | string | **spinnaker only** (1cam) | Camera serial; when set, `SpinnakerCapture` selects by `SerialNumber` and ignores `cam1idx` |
 | `cam1fps` | int | **flycap only** | Target frame rate: sets `FramesPerSecond` on the FlyCapture node |
 | `cam1ts` | bool | flycap only | Enable embedded timestamp |
 | `cam1framecounter` | bool | flycap only | Enable frame counter |

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -58,6 +59,98 @@ class TestListCameras:
     def test_spinnaker_not_installed_exits_one(self) -> None:
         with patch.dict("sys.modules", {"PySpin": None}):
             result = runner.invoke(app, ["list-cameras", "--driver", "spinnaker"])
+        assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# probe-cameras
+
+
+class TestProbeCameras:
+    def test_json_output(self) -> None:
+        from msw_flir_bonsai.probe import CameraInfo, ProbeResult
+
+        found = ProbeResult("flycap", "sdk", 1, [CameraInfo(0, "12345678")])
+        with patch("msw_flir_bonsai.probe.probe_cameras", return_value=found):
+            result = runner.invoke(app, ["probe-cameras", "--json"])
+        assert result.exit_code == 0
+        assert json.loads(result.output)["cameras"] == [
+            {"index": 0, "serial": "12345678"}
+        ]
+
+    def test_unavailable_exits_one(self) -> None:
+        from msw_flir_bonsai.probe import ProbeResult
+
+        with patch(
+            "msw_flir_bonsai.probe.probe_cameras",
+            return_value=ProbeResult("spinnaker", error="not found"),
+        ):
+            result = runner.invoke(app, ["probe-cameras", "-d", "spinnaker"])
+        assert result.exit_code == 1
+        assert "via none" in result.output
+
+    def test_unknown_driver_exits_one(self) -> None:
+        result = runner.invoke(app, ["probe-cameras", "--driver", "pylon"])
+        assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# test-record
+
+
+class TestTestRecord:
+    def test_no_bonsai_is_a_clear_error(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv("BONSAI_EXE", raising=False)
+        with patch("msw_flir_bonsai.cli._BONSAI_SEARCH_PATHS", [tmp_path / "x.exe"]):
+            result = runner.invoke(
+                app, ["test-record", "-d", "spinnaker", "--output-dir", str(tmp_path)]
+            )
+        assert result.exit_code == 1
+        assert "Bonsai.exe not found" in result.output
+        assert not isinstance(result.exception, OSError)
+
+    @staticmethod
+    def _record(tmp_path, exited: bool = False, timestamps: bytes | None = b"1,2"):
+        exe = tmp_path / "Bonsai.exe"
+        exe.touch()
+        out = tmp_path / "out"
+        if timestamps is not None:
+            out.mkdir()
+            (out / "test.timestamps.csv").write_bytes(timestamps)
+        with (
+            patch("msw_flir_bonsai.cli._BONSAI_SEARCH_PATHS", [exe]),
+            patch("msw_flir_bonsai.runner.BonsaiCameraRunner") as cls,
+        ):
+            cls.return_value.exited_unexpectedly = exited
+            result = runner.invoke(
+                app,
+                ["test-record", "-d", "spinnaker", "--duration", "0"]
+                + ["--output-dir", str(out)],
+            )
+        return result, cls, exe
+
+    def test_discovered_bonsai_used(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv("BONSAI_EXE", raising=False)
+        result, cls, exe = self._record(tmp_path)
+        assert result.exit_code == 0, result.output
+        assert cls.call_args.kwargs["bonsai_exe"] == str(exe)
+        assert cls.call_args.kwargs["driver"] == "spinnaker"
+
+    def test_exit_before_stop_fails(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv("BONSAI_EXE", raising=False)
+        result, _, _ = self._record(tmp_path, exited=True)
+        assert result.exit_code == 1
+        assert "exited before the recording was stopped" in result.output
+
+    def test_empty_timestamps_fails(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv("BONSAI_EXE", raising=False)
+        result, _, _ = self._record(tmp_path, timestamps=b"")
+        assert result.exit_code == 1
+        assert "missing or empty" in result.output
+
+    def test_missing_timestamps_fails(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv("BONSAI_EXE", raising=False)
+        result, _, _ = self._record(tmp_path, timestamps=None)
         assert result.exit_code == 1
 
 

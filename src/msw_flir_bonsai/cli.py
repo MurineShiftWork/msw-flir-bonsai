@@ -3,17 +3,20 @@
 Standalone usage (after pip install msw_flir_bonsai):
     msw-flir find-bonsai
     msw-flir list-cameras --driver flycap
+    msw-flir probe-cameras --driver spinnaker --json
     msw-flir run D:\\DATA\\video mouse001__20260524 --n-cameras 2 --fps 60
     msw-flir test-record --cam-index 0 --duration 5
 
 Plugin usage (when registered as msw.cli entry-point and MSW is installed):
     msw flir find-bonsai
     msw flir list-cameras
+    msw flir probe-cameras
     msw flir run ...
 """
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -37,6 +40,11 @@ _BONSAI_SEARCH_PATHS = [
 # find-bonsai
 
 
+def _discover_bonsai() -> Path | None:
+    """First existing Bonsai.exe in the known install locations, or None."""
+    return next((p for p in _BONSAI_SEARCH_PATHS if p.exists()), None)
+
+
 @app.command("find-bonsai")
 def find_bonsai() -> None:
     """Scan known install locations and print the Bonsai.exe path.
@@ -44,10 +52,10 @@ def find_bonsai() -> None:
     Copy the printed path into your setup YAML under cameras.bonsai_exe,
     or set the BONSAI_EXE environment variable.
     """
-    for p in _BONSAI_SEARCH_PATHS:
-        if p.exists():
-            typer.echo(str(p))
-            raise typer.Exit(0)
+    found = _discover_bonsai()
+    if found is not None:
+        typer.echo(str(found))
+        raise typer.Exit(0)
     lines = "\n".join(f"  {p}" for p in _BONSAI_SEARCH_PATHS)
     typer.echo(
         f"Bonsai.exe not found in known locations:\n{lines}\n\n"
@@ -139,6 +147,45 @@ def _list_spinnaker() -> None:
 
 
 # ---------------------------------------------------------------------------
+# probe-cameras  (SDK via ctypes in a child process, USB fallback)
+
+
+@app.command("probe-cameras")
+def probe_cameras_cmd(
+    driver: str = typer.Option(
+        "flycap", "--driver", "-d", help="Camera driver: flycap or spinnaker"
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Print the result as JSON"),
+    timeout: float = typer.Option(
+        10.0, "--timeout", help="Seconds before the SDK probe is killed"
+    ),
+) -> None:
+    """Print the connected cameras' index and serial without opening them.
+
+    Uses the FlyCapture2 or Spinnaker C library in a child process, falling
+    back to the Windows USB device list (count and USB serials only). Exits 1
+    when neither source could be read.
+    """
+    from msw_flir_bonsai.probe import DRIVERS, probe_cameras
+
+    if driver not in DRIVERS:
+        typer.echo(f"Unknown driver '{driver}'. Use flycap or spinnaker.", err=True)
+        raise typer.Exit(1)
+    result = probe_cameras(driver, timeout=timeout)
+    if as_json:
+        typer.echo(json.dumps(result.to_dict()))
+    else:
+        count = "?" if result.count is None else result.count
+        typer.echo(f"{driver}: {count} camera(s) via {result.source}")
+        for cam in result.cameras:
+            idx = "-" if cam.index is None else cam.index
+            typer.echo(f"  [{idx}]  serial={cam.serial or '?'}")
+        if result.error:
+            typer.echo(f"note: {result.error}", err=True)
+    raise typer.Exit(1 if result.source == "none" else 0)
+
+
+# ---------------------------------------------------------------------------
 # run  (multi-camera launcher: blocks until Ctrl+C or all processes exit)
 
 
@@ -221,7 +268,7 @@ def test_record(
         0, "--cam-index", "-c", help="Camera index (0-based)"
     ),
     driver: str = typer.Option(
-        "flycap", "--driver", help="Camera driver: flycap or spinnaker"
+        "flycap", "--driver", "-d", help="Camera driver: flycap or spinnaker"
     ),
     fps: int = typer.Option(30, "--fps", help="Target frame rate"),
     duration: float = typer.Option(
@@ -236,36 +283,72 @@ def test_record(
 ) -> None:
     """Run a short test recording from a single camera to verify the setup.
 
-    Useful for checking camera index, frame rate, and output path before
-    a real session.  Duration defaults to 5 seconds.
-    """
-    from msw_flir_bonsai.runner import BonsaiCameraRunner
+    The duration counts from the first frame in the video file. Exits 1 when
+    no frame arrives, Bonsai exits before the stop, or the timestamps file is
+    missing or empty.
 
+    Useful for checking camera index, frame rate, and output path before
+    a real session.  Duration defaults to 5 seconds.  Without --bonsai-exe or
+    BONSAI_EXE, Bonsai.exe is looked up like find-bonsai.
+    """
+    from msw_flir_bonsai.runner import BonsaiCameraRunner, BonsaiStartError
+
+    exe = bonsai_exe or _discover_bonsai()
+    if exe is None:
+        typer.echo(
+            "Bonsai.exe not found: pass --bonsai-exe, set BONSAI_EXE, or run "
+            "msw-flir find-bonsai to see the searched locations.",
+            err=True,
+        )
+        raise typer.Exit(1)
     resolved_workflow = workflow or f"run-flir-{driver}-1cam"
+    try:
+        runner = BonsaiCameraRunner(
+            workflow=resolved_workflow,
+            acqdir=str(output_dir),
+            cam_basename=session,
+            cam_index=cam_index,
+            fps=fps,
+            driver=driver,
+            bonsai_exe=str(exe),
+        )
+    except OSError as e:  # unknown workflow stem
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
     output_dir.mkdir(parents=True, exist_ok=True)
-    runner = BonsaiCameraRunner(
-        workflow=resolved_workflow,
-        acqdir=str(output_dir),
-        cam_basename=session,
-        cam_index=cam_index,
-        fps=fps,
-        driver=driver,
-        bonsai_exe=str(bonsai_exe) if bonsai_exe else None,
-    )
 
     typer.echo(
         f"Test recording: cam_index={cam_index}  driver={driver}  fps={fps}  "
         f"duration={duration}s"
     )
     runner.start()
+    exited = False
     try:
+        # the duration counts from the first frame, not from launch: Bonsai
+        # needs ~5 s to open the camera
+        runner.check_started()
         time.sleep(duration)
+    except BonsaiStartError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
     except KeyboardInterrupt:
         pass
     finally:
+        # read before stop(): stop() marks any later exit as requested
+        exited = runner.exited_unexpectedly
         runner.stop()
         runner.wait(timeout=10)
 
+    # Bonsai exits 0 when it could not record, so check the outcome instead
+    timestamps = output_dir / f"{session}.timestamps.csv"
+    problems = []
+    if exited:
+        problems.append("Bonsai exited before the recording was stopped")
+    if not timestamps.is_file() or timestamps.stat().st_size == 0:
+        problems.append(f"timestamps file missing or empty: {timestamps}")
+    if problems:
+        typer.echo("Test recording failed: " + "; ".join(problems), err=True)
+        raise typer.Exit(1)
     typer.echo(f"Done. Output written to: {output_dir}")
 
 
@@ -314,6 +397,7 @@ def register(sub_parsers: object) -> None:
     Called by the MSW CLI plugin loader at startup.  Usage after registration:
         msw flir find-bonsai
         msw flir list-cameras --driver flycap
+        msw flir probe-cameras --driver flycap --json
         msw flir run <output_dir> <session> --n-cameras 2
         msw flir test-record --cam-index 0 --duration 5
     """

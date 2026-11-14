@@ -8,6 +8,16 @@ Camera subprocess management: launch and stop Bonsai processes.
 
 ::: msw_flir_bonsai.runner.MultiCameraRunner
 
+## msw_flir_bonsai.probe
+
+Camera identity before launch: serials per SDK index, with a USB fallback.
+
+::: msw_flir_bonsai.probe.probe_cameras
+
+::: msw_flir_bonsai.probe.resolve_camera_units
+
+::: msw_flir_bonsai.probe.ProbeResult
+
 ## msw_flir_bonsai.timestamps
 
 Preprocessing utilities for Bonsai camera CSVs.
