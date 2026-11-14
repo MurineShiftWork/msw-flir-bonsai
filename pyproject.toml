@@ -69,7 +69,9 @@ dev = [
 ]
 docs = [
     "mkdocs-material",
-    "mkdocstrings[python]",
+    # with pymdown-extensions 12, mkdocstrings 1.0.6 fails to render api.md; 1.0.8 works
+    # (and needs Python 3.11, so the docs extra is 3.11+)
+    "mkdocstrings[python]>=1.0.8; python_version >= '3.11'",
 ]
 
 # ---------------------------------------------------------------------------
