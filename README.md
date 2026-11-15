@@ -126,13 +126,13 @@ Each Bonsai workflow creates a session directory and writes:
     <session>__<datetime>__cam1.csv     # per-frame metadata
 ```
 
-**CSV columns (FlyCapture):**
+**CSV columns** (headerless, in this order):
 
 | Column | Description |
 |---|---|
-| `frame_counter` | Hardware frame counter (rolls over at 32-bit) |
-| `timestamp_raw` | Embedded hardware timestamp (seconds, cycles every 128 s) |
-| `gpio_state` | GPIO input state (0/1) — records TTL barcode and trial pulses |
+| `gpio_state` | Line status bitmask; FlyCapture barcode/TTL input is bit 31 |
+| `timestamp_raw` | FlyCapture: packed cycle timer (wraps every 128 s). Spinnaker: nanoseconds |
+| `frame_counter` | Hardware frame counter (FlyCapture rolls over at 32-bit) |
 
 ---
 
@@ -143,12 +143,12 @@ from msw_flir_bonsai.timestamps import preprocess_camera_csv, detect_dropped_fra
 
 df = preprocess_camera_csv(
     "cam1.csv",
-    ts_cycle_s=128.0,       # FlyCapture rollover period; np.inf for Spinnaker
+    driver="flycap",        # or "spinnaker"; selects timestamp decoding
     session_start_s=None,   # set to subtract session t0 if known
 )
-# df["timestamp_s"]    — unwrapped monotonic timestamps
-# df["frame_counter"]  — unwrapped frame counter
-# df["gpio_state"]     — TTL/barcode input
+# df["timestamp_s"]:   unwrapped monotonic timestamps
+# df["frame_counter"]: unwrapped frame counter
+# df["gpio_state"]:    line status bitmask (barcode on bit 31, FlyCapture)
 
 drops = detect_dropped_frames(df, expected_fps=60.0)
 ```
@@ -167,7 +167,7 @@ Partial barcodes are handled via Hamming-distance matching (up to 2 bit errors t
 ```python
 from msw_flir_bonsai.alignment import extract_camera_barcodes, align_barcodes
 
-cam_barcodes = extract_camera_barcodes(df)          # [(time_s, value), ...]
+cam_barcodes = extract_camera_barcodes(df, line_bit=31)  # [(time_s, value), ...]
 bpod_barcodes = [...]                               # from Bpod session data
 offset_s = align_barcodes(bpod_barcodes, cam_barcodes)
 df["timestamp_bpod"] = df["timestamp_s"] + offset_s

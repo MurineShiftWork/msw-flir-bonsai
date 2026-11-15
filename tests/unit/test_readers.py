@@ -22,8 +22,9 @@ def _video(d: Path, label: str) -> Path:
 
 def _timestamps(d: Path, label: str, rows: int = 3) -> Path:
     p = d / f"{_BASENAME}.msw.{label}.timestamps.csv"
-    # Bonsai CSV: headerless, frame_counter,timestamp_raw[,gpio_state]
-    lines = [f"{i},{i * 0.0167:.4f},0" for i in range(rows)]
+    # Bonsai CSV: headerless gpio_state,timestamp_raw,frame_counter (FlyCapture
+    # packed timestamp: cycle count in bits 24-12, 8000 per second)
+    lines = [f"0,{(i * 133) << 12},{i}" for i in range(rows)]
     p.write_text("\n".join(lines) + "\n")
     return p
 
@@ -97,6 +98,16 @@ def test_load_parses_timestamps(tmp_path):
     assert frames is not None
     assert len(frames) == 5
     assert "timestamp_s" in frames.columns
+
+
+def test_load_spinnaker_driver_decodes_nanoseconds(tmp_path):
+    _video(tmp_path, "top.0")
+    p = tmp_path / f"{_BASENAME}.msw.top.0.timestamps.csv"
+    p.write_text("0,1000000000,0\n0,1016666667,1\n")
+    session = load_session(tmp_path, load=True, driver="spinnaker")
+    frames = session.cameras["top.0"].frames
+    assert frames is not None
+    assert frames["timestamp_s"].tolist() == pytest.approx([1.0, 1.016666667])
 
 
 def test_load_false_does_not_parse(tmp_path):

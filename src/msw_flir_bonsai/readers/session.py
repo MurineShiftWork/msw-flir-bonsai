@@ -35,6 +35,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pandas as pd
 
+    from msw_flir_bonsai.timestamps import Driver
+
 log = logging.getLogger(__name__)
 
 # A camera label may itself contain dots (``top.0``); the suffix is fixed, so
@@ -86,9 +88,13 @@ class FlirSession:
 
     @classmethod
     def from_directory(
-        cls, directory: str | Path, *, load: bool = False
+        cls, directory: str | Path, *, load: bool = False, driver: Driver = "flycap"
     ) -> FlirSession:
-        """Discover (and optionally load) a video_flir acquisition directory."""
+        """Discover (and optionally load) a video_flir acquisition directory.
+
+        The acquisition files do not record the camera driver, so the caller
+        passes it (default ``"flycap"``); it selects the timestamp decoding.
+        """
         directory = Path(directory)
         if not directory.is_dir():
             raise NotADirectoryError(f"not a directory: {directory}")
@@ -115,7 +121,7 @@ class FlirSession:
             manifest=_read_manifest(directory),
         )
         if load:
-            session._load_frames()
+            session._load_frames(driver)
 
         n_complete = sum(c.complete for c in cameras.values())
         log.debug(
@@ -126,7 +132,7 @@ class FlirSession:
         )
         return session
 
-    def _load_frames(self) -> None:
+    def _load_frames(self, driver: Driver = "flycap") -> None:
         """Parse each present timestamps CSV; record (not raise) per-camera errors."""
         from msw_flir_bonsai.timestamps import preprocess_camera_csv
 
@@ -134,7 +140,7 @@ class FlirSession:
             if cam.timestamps is None:
                 continue
             try:
-                cam.frames = preprocess_camera_csv(cam.timestamps)
+                cam.frames = preprocess_camera_csv(cam.timestamps, driver=driver)
             except Exception as e:  # noqa: BLE001 - record, don't fail discovery
                 cam.error = f"{type(e).__name__}: {e}"
                 log.debug("frame load error %s: %s", cam.label, e)
@@ -161,7 +167,9 @@ def _read_manifest(directory: Path) -> dict | None:
         return None
 
 
-def load_session(directory: str | Path, *, load: bool = False) -> FlirSession:
+def load_session(
+    directory: str | Path, *, load: bool = False, driver: Driver = "flycap"
+) -> FlirSession:
     """Load one FLIR video acquisition directory and return a FlirSession.
 
     Canonical, discoverable entry point mirroring
@@ -173,6 +181,9 @@ def load_session(directory: str | Path, *, load: bool = False) -> FlirSession:
         directory: Path to the ``…__video_flir`` acquisition directory.
         load: If True, also parse each camera's timestamps CSV into a DataFrame
             (``FlirCamera.frames``). Default False (discovery only).
+        driver: ``"flycap"`` (default) or ``"spinnaker"``: how the timestamps
+            CSV is decoded. Not recorded in the acquisition, so set it for
+            Spinnaker recordings.
 
     Returns:
         A populated ``FlirSession``.
@@ -180,4 +191,4 @@ def load_session(directory: str | Path, *, load: bool = False) -> FlirSession:
     Raises:
         NotADirectoryError: if ``directory`` does not exist or is not a directory.
     """
-    return FlirSession.from_directory(directory, load=load)
+    return FlirSession.from_directory(directory, load=load, driver=driver)

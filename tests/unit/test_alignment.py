@@ -15,12 +15,18 @@ from msw_flir_bonsai.alignment import (
 # Helpers
 
 
+# FlyCapture line status words: other bits always set, barcode on bit 31.
+_LOW = 0x70000000
+_HIGH = 0xF0000000
+
+
 def _make_df(timestamps: list[float], gpio: list[int]) -> pd.DataFrame:
+    """Build a camera frame table; *gpio* is the 0/1 level of the bit-31 line."""
     return pd.DataFrame(
         {
             "frame_index": range(len(timestamps)),
             "timestamp_s": timestamps,
-            "gpio_state": gpio,
+            "gpio_state": [_HIGH if g else _LOW for g in gpio],
         }
     )
 
@@ -65,6 +71,25 @@ class TestExtractCameraBarcodes:
         assert len(result) >= 1
         t, val = result[0]
         assert t == pytest.approx(ts[20], abs=0.05)
+
+    def test_bit31_edges_counted_with_other_bits_set(self) -> None:
+        fps = 60.0
+        frames_per_bit = 6
+        # 4 barcodes, each a 1-bit start pulse; other GPIO bits stay set
+        starts = [30, 330, 630, 930]
+        gpio = [0] * 1200
+        for s in starts:
+            for i in range(s, s + frames_per_bit):
+                gpio[i] = 1
+        ts = [i / fps for i in range(len(gpio))]
+        df = _make_df(ts, gpio)
+        result = extract_camera_barcodes(df, fps=fps, barcode_bit_duration_s=0.1)
+        assert [t for t, _ in result] == pytest.approx([ts[s] for s in starts])
+
+    def test_other_line_bit_sees_no_edges(self) -> None:
+        gpio = _gpio_pulse(200, 20, 6)
+        df = _make_df([i / 60 for i in range(200)], gpio)
+        assert extract_camera_barcodes(df, line_bit=30) == []
 
     def test_returns_list_of_tuples(self) -> None:
         fps = 60.0

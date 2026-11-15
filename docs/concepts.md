@@ -39,17 +39,18 @@ the value as a named argument.
 
 `timestamps.py` provides utilities for working with camera frame timestamps:
 
-- `load_camera_csv(path)`: reads the Bonsai-generated CSV with a `Timestamp` column
+- `load_camera_csv(path, driver)`: reads the headerless Bonsai CSV as
+  `gpio_state`, `timestamp_raw`, `frame_counter`
 - `unwrap_cyclic(timestamps)` / `unwrap_counter(timestamps)`: corrects for hardware
   counter rollover in raw timestamp streams
-- `preprocess_camera_csv(path)`: convenience wrapper that loads, unwraps, and returns
-  a clean timestamp array
+- `preprocess_camera_csv(path, driver)`: loads the CSV and decodes the timestamps per
+  driver (FlyCapture packed cycle timer, Spinnaker nanoseconds) into `timestamp_s`
 - `detect_dropped_frames(timestamps, fps)`: identifies gaps larger than 1.5 frame
   periods, indicating dropped frames
 
 `alignment.py` provides barcode and TTL-based alignment between camera timestamps and
 behaviour event times. `extract_camera_barcodes()` decodes TTL barcode pulses from a
-camera GPIO channel; `align_barcodes()` maps camera frame indices to behaviour trial
+camera GPIO line (`line_bit`, 31 on FlyCapture); `align_barcodes()` maps camera frame indices to behaviour trial
 timestamps via matched barcode events.
 
 ## MSW integration

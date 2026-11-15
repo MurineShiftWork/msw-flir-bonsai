@@ -98,7 +98,7 @@ The IronPython transform inside the workflow creates:
   <session>/
     <session>__<YYYYMMDD_HHMMSS>/
       <session>__<YYYYMMDD_HHMMSS>__cam0.avi   # video
-      <session>__<YYYYMMDD_HHMMSS>__cam0.csv   # metadata (counter, timestamp, gpio)
+      <session>__<YYYYMMDD_HHMMSS>__cam0.csv   # metadata (gpio, timestamp, counter)
 ```
 
 The `preprocess_camera_csv` function loads and cleans the CSV;

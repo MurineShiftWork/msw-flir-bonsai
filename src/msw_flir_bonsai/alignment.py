@@ -10,6 +10,10 @@ Two alignment channels are available:
    start/end.  The GPIO state column in the camera CSV captures these edges at
    frame resolution, providing a per-frame trial tag without needing a barcode.
 
+The GPIO column is the camera's line status bitmask; both channels read one
+line from it, selected by ``line_bit`` (default 31, the FlyCapture barcode
+input). For Spinnaker recordings pass the bit of the wired line.
+
 Typical workflow::
 
     from msw_flir_bonsai.alignment import align_barcodes, align_ttl_edges
@@ -17,7 +21,7 @@ Typical workflow::
     # --- barcode alignment ---
     cam_df = preprocess_camera_csv("cam1.csv")
     bpod_barcodes = [...]  # list of (time_s, barcode_int) from Bpod events
-    cam_barcodes = extract_camera_barcodes(cam_df, gpio_col="gpio_state")
+    cam_barcodes = extract_camera_barcodes(cam_df, line_bit=31)
     offset_s = align_barcodes(bpod_barcodes, cam_barcodes)
 
     # --- TTL-edge alignment (when barcode is absent/incomplete) ---
@@ -31,6 +35,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
+
+from msw_flir_bonsai.timestamps import FLYCAP_BARCODE_LINE_BIT, line_state
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -46,8 +52,9 @@ def extract_camera_barcodes(
     gpio_col: str = "gpio_state",
     fps: float = 60.0,
     barcode_bit_duration_s: float = 0.1,
+    line_bit: int = FLYCAP_BARCODE_LINE_BIT,
 ) -> list[tuple[float, int]]:
-    """Extract binary barcodes from the GPIO state column.
+    """Extract binary barcodes from one line of the GPIO state column.
 
     A barcode is a fixed-length burst of high/low GPIO transitions.  This
     function detects rising edges and groups subsequent bits into integer
@@ -55,9 +62,11 @@ def extract_camera_barcodes(
 
     Args:
         df: Preprocessed camera DataFrame with ``timestamp_s`` and *gpio_col*.
-        gpio_col: Column name holding the binary GPIO state (0/1 or 0/255).
+        gpio_col: Column name holding the line status bitmask.
         fps: Camera frame rate used to compute bit window sizes.
         barcode_bit_duration_s: Duration of each barcode bit in seconds.
+        line_bit: Bit of the barcode line in *gpio_col* (31 on FlyCapture; the
+            Spinnaker bit depends on the wiring).
 
     Returns:
         List of ``(time_s, barcode_int)`` tuples, one per detected barcode.
@@ -67,7 +76,7 @@ def extract_camera_barcodes(
             f"GPIO column '{gpio_col}' not found. Available: {list(df.columns)}"
         )
 
-    gpio = (df[gpio_col].to_numpy() > 0).astype(int)
+    gpio = line_state(df[gpio_col].to_numpy(), line_bit)
     ts = df["timestamp_s"].to_numpy()
     frames_per_bit = max(1, int(round(fps * barcode_bit_duration_s)))
 
@@ -157,6 +166,7 @@ def align_ttl_edges(
     gpio_col: str = "gpio_state",
     max_offset_search_s: float = 60.0,
     min_matches: int = 5,
+    line_bit: int = FLYCAP_BARCODE_LINE_BIT,
 ) -> float:
     """Estimate camera-to-Bpod offset by matching TTL rising edges.
 
@@ -167,14 +177,15 @@ def align_ttl_edges(
     Args:
         cam_df: Preprocessed camera DataFrame.
         bpod_event_times_s: Trial event times (e.g. trial-start) in Bpod clock.
-        gpio_col: Camera GPIO column name.
+        gpio_col: Camera GPIO column name (line status bitmask).
         max_offset_search_s: Maximum |offset| to consider during search.
         min_matches: Minimum number of matching edges required.
+        line_bit: Bit of the TTL line in *gpio_col* (31 on FlyCapture).
 
     Returns:
         ``offset_s`` such that ``bpod_time = camera_time + offset_s``.
     """
-    gpio = (cam_df[gpio_col].to_numpy() > 0).astype(int)
+    gpio = line_state(cam_df[gpio_col].to_numpy(), line_bit)
     ts = cam_df["timestamp_s"].to_numpy()
     rising_idx = np.where((gpio[1:] == 1) & (gpio[:-1] == 0))[0] + 1
     cam_edge_times = ts[rising_idx]
