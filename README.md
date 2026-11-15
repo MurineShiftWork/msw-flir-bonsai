@@ -42,7 +42,7 @@ package manager (`Tools → Manage Packages`):
 | `Bonsai.Vision.Design` | Vision editor support | 2.8.5 |
 | `Bonsai.Scripting.IronPython` | IronPython inline scripts | 2.8.5 |
 | `Bonsai.Scripting.IronPython.Design` | IronPython editor | 2.8.5 |
-| `Bonsai.PointGrey2` | FlyCapture2 camera driver | 0.3.0 |
+| `Bonsai.PointGrey2` | FlyCapture2 camera driver | 1.0.0 |
 | `Bonsai.Spinnaker` | Spinnaker camera driver | 0.10.0 |
 
 ### Camera drivers (Windows)
