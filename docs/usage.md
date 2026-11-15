@@ -9,8 +9,13 @@ For installation and first-run verification, see [Getting started](getting_start
 
 The usual path: instead of driving the runner yourself, declare the camera in
 the rig's setup YAML under `cameras:` and run any camera-aware MSW task. MSW then
-launches Bonsai and records a `video_flir` acquisition (one `.avi` +
-`.timestamps.csv` per camera) alongside the behavioural data.
+launches Bonsai and records a `video_flir` acquisition (one `.avi`, one
+`.timestamps.csv` and one `.camera.json` per camera) alongside the behavioural data.
+
+The `.camera.json` is written when the camera starts. It records the driver, the
+workflow, the camera index, the requested frame rate, the CSV column order and the
+timestamp encoding, so `load_session` decodes each camera without being told the
+driver. Recordings without it predate it and are read as FlyCapture.
 
 One FlyCapture camera on a setup:
 
