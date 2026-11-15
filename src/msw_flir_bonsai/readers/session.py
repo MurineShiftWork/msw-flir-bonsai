@@ -9,6 +9,7 @@ File naming (written by the msw-core camera adapter + the Bonsai workflow):
 
     {acquisition_basename}.msw.{cam_label}.avi
     {acquisition_basename}.msw.{cam_label}.timestamps.csv
+    {acquisition_basename}.msw.{cam_label}.camera.json   (driver, CSV layout)
 
 The ``.msw.`` separator and the per-camera ``cam_label`` (e.g. ``top.0``,
 ``cam0``) are produced by the namespace builder upstream; this module only
@@ -43,6 +44,10 @@ log = logging.getLogger(__name__)
 # anchor on it and let the label capture greedily up to the suffix.
 _VIDEO_RE = re.compile(r"^.+\.msw\.(?P<label>.+)\.avi$")
 _TS_RE = re.compile(r"^.+\.msw\.(?P<label>.+)\.timestamps\.csv$")
+_META_RE = re.compile(r"^.+\.msw\.(?P<label>.+)\.camera\.json$")
+
+#: Driver for recordings without a metadata file: all of them used FlyCapture.
+LEGACY_DRIVER = "flycap"
 
 
 @dataclass
@@ -54,6 +59,23 @@ class FlirCamera:
     timestamps: Path | None = None
     frames: pd.DataFrame | None = None
     error: str | None = None
+    metadata: dict | None = None
+
+    def driver(self, fallback: str | None = None) -> str:
+        """The recording's driver: from its metadata file, else ``fallback``.
+
+        Without either, ``LEGACY_DRIVER``: recordings from before the metadata file
+        were all made with FlyCapture.
+        """
+        recorded = (self.metadata or {}).get("driver")
+        if recorded and fallback and recorded != fallback:
+            log.warning(
+                "camera %s: metadata says driver %r, ignoring %r",
+                self.label,
+                recorded,
+                fallback,
+            )
+        return str(recorded or fallback or LEGACY_DRIVER)
 
     @property
     def complete(self) -> bool:
@@ -88,12 +110,17 @@ class FlirSession:
 
     @classmethod
     def from_directory(
-        cls, directory: str | Path, *, load: bool = False, driver: Driver = "flycap"
+        cls,
+        directory: str | Path,
+        *,
+        load: bool = False,
+        driver: Driver | None = None,
     ) -> FlirSession:
         """Discover (and optionally load) a video_flir acquisition directory.
 
-        The acquisition files do not record the camera driver, so the caller
-        passes it (default ``"flycap"``); it selects the timestamp decoding.
+        Each camera's driver, which selects the timestamp decoding, comes from its
+        ``.camera.json``. ``driver`` is used for cameras without one, and FlyCapture
+        when it is not given either.
         """
         directory = Path(directory)
         if not directory.is_dir():
@@ -114,6 +141,12 @@ class FlirSession:
             m = _VIDEO_RE.match(p.name)
             if m:
                 _cam(m.group("label")).video = p
+                continue
+            m = _META_RE.match(p.name)
+            if m:
+                from msw_flir_bonsai.metadata import read_camera_metadata
+
+                _cam(m.group("label")).metadata = read_camera_metadata(p)
 
         session = cls(
             directory=directory,
@@ -132,7 +165,7 @@ class FlirSession:
         )
         return session
 
-    def _load_frames(self, driver: Driver = "flycap") -> None:
+    def _load_frames(self, driver: Driver | None = None) -> None:
         """Parse each present timestamps CSV; record (not raise) per-camera errors."""
         from msw_flir_bonsai.timestamps import preprocess_camera_csv
 
@@ -140,7 +173,10 @@ class FlirSession:
             if cam.timestamps is None:
                 continue
             try:
-                cam.frames = preprocess_camera_csv(cam.timestamps, driver=driver)
+                cam.frames = preprocess_camera_csv(
+                    cam.timestamps,
+                    driver=cam.driver(driver),  # type: ignore[arg-type]
+                )
             except Exception as e:  # noqa: BLE001 - record, don't fail discovery
                 cam.error = f"{type(e).__name__}: {e}"
                 log.debug("frame load error %s: %s", cam.label, e)
@@ -168,7 +204,7 @@ def _read_manifest(directory: Path) -> dict | None:
 
 
 def load_session(
-    directory: str | Path, *, load: bool = False, driver: Driver = "flycap"
+    directory: str | Path, *, load: bool = False, driver: Driver | None = None
 ) -> FlirSession:
     """Load one FLIR video acquisition directory and return a FlirSession.
 
@@ -181,9 +217,9 @@ def load_session(
         directory: Path to the ``…__video_flir`` acquisition directory.
         load: If True, also parse each camera's timestamps CSV into a DataFrame
             (``FlirCamera.frames``). Default False (discovery only).
-        driver: ``"flycap"`` (default) or ``"spinnaker"``: how the timestamps
-            CSV is decoded. Not recorded in the acquisition, so set it for
-            Spinnaker recordings.
+        driver: ``"flycap"`` or ``"spinnaker"`` for cameras without a
+            ``.camera.json`` (recordings made before it existed). Cameras with one
+            use the driver it records; without either, FlyCapture.
 
     Returns:
         A populated ``FlirSession``.
