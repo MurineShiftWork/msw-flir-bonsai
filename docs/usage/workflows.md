@@ -34,8 +34,9 @@ Each 1-cam workflow exposes these properties, settable via `Bonsai.exe --start -
     The Spinnaker workflow has no `cam1fps`, `cam1ts` or `cam1framecounter` properties:
     `SpinnakerCapture` exposes only `Index`, `SerialNumber` and `ColorProcessing`. Set the frame
     rate, exposure and gain on the camera with SpinView and save them as the camera's default
-    user set, which the camera loads at power-on. Chunk data (line status, timestamp, frame ID)
-    needs Bonsai.Spinnaker 0.10 or newer.
+    user set, which the camera loads at power-on. The metadata CSV reads chunk data (line
+    status, timestamp, frame ID): enable chunk mode and these three chunks in the same user set.
+    It needs Bonsai.Spinnaker 0.10 or newer.
 
 The `BonsaiCameraRunner._build_cmd()` method assembles these into the subprocess
 command automatically.
