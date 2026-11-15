@@ -16,6 +16,12 @@ Preprocessing utilities for Bonsai camera CSVs.
 
 ::: msw_flir_bonsai.timestamps.unwrap_counter
 
+::: msw_flir_bonsai.timestamps.decode_flycap_timestamp
+
+::: msw_flir_bonsai.timestamps.decode_timestamps
+
+::: msw_flir_bonsai.timestamps.line_state
+
 ::: msw_flir_bonsai.timestamps.load_camera_csv
 
 ::: msw_flir_bonsai.timestamps.preprocess_camera_csv

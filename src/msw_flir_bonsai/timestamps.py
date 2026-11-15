@@ -1,31 +1,53 @@
 """Camera timestamp preprocessing utilities.
 
-FlyCapture and Spinnaker cameras embed hardware timestamps in each frame.
-FlyCapture timestamps use a 128-second cycle counter that rolls over;
-frame counters may also roll over at 16-bit or 32-bit boundaries.
+The Bonsai workflows write one headerless CSV per camera with three columns,
+in the order of the workflow's ``MemberSelector``:
 
-This module provides:
-  - ``unwrap_timestamps`` : remove rollovers from a cyclic timestamp array
-  - ``load_camera_csv``   : load the Bonsai-written CSV into a DataFrame
-  - ``preprocess_camera_csv``: full pipeline: load → unwrap → compute absolute times
+- ``gpio_state``: line status bitmask. FlyCapture
+  ``Metadata.embeddedGPIOPinState``, Spinnaker
+  ``ChunkData.ExposureEndLineStatusAll``.
+- ``timestamp_raw``: camera timestamp as written. FlyCapture
+  ``Metadata.embeddedTimeStamp``, Spinnaker ``ChunkData.Timestamp``.
+- ``frame_counter``: FlyCapture ``Metadata.embeddedFrameCounter``, Spinnaker
+  ``ChunkData.FrameID``.
 
-The output is a DataFrame with columns:
-  ``frame_index`` (int), ``timestamp_raw``, ``timestamp_s`` (float, unwrapped),
-  ``frame_counter`` (int, unwrapped), ``gpio_state`` (int, optional)
+``gpio_state`` is a bitmask of all camera lines, not a 0/1 level: select one
+line with ``line_state`` (FlyCapture barcode input: bit 31).
 
-These can be directly matched to Bpod trial events via barcode alignment
-(see ``alignment.py``) or via TTL state changes.
+``timestamp_raw`` is decoded per driver into ``timestamp_s``:
+
+- FlyCapture packs the cycle timer into a uint32: bits 31-25 seconds (mod 128),
+  bits 24-12 cycle count (8000 Hz), bits 11-0 cycle offset (1/3072 of a cycle).
+  The decoded seconds roll over every 128 s and are unwrapped.
+- Spinnaker gives nanoseconds as a uint64 that does not wrap.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 
-# FlyCapture embedded timestamp rolls over every 128 seconds.
+Driver = Literal["flycap", "spinnaker"]
+DRIVERS: tuple[str, ...] = ("flycap", "spinnaker")
+
+#: Column names of the workflow CSV, in file order.
+CSV_COLUMNS: tuple[str, str, str] = ("gpio_state", "timestamp_raw", "frame_counter")
+
+#: Line bit carrying the barcode/TTL input on the FlyCapture rigs.
+FLYCAP_BARCODE_LINE_BIT: int = 31
+
+# FlyCapture embedded timestamp: seconds field rolls over every 128 s.
 _FLYCAP_TS_CYCLE_S: float = 128.0
+_FLYCAP_CYCLE_HZ: float = 8000.0
+_FLYCAP_OFFSET_PER_CYCLE: float = 3072.0
+
+
+def _check_driver(driver: str) -> None:
+    if driver not in DRIVERS:
+        raise ValueError(f"unknown driver {driver!r}; use one of {DRIVERS}")
 
 
 def unwrap_cyclic(values: np.ndarray, period: float) -> np.ndarray:
@@ -36,14 +58,13 @@ def unwrap_cyclic(values: np.ndarray, period: float) -> np.ndarray:
         period: The period at which the counter resets.
 
     Returns:
-        Monotonically increasing array with the same dtype as *values*.
+        Monotonically increasing float array.
     """
     values = np.asarray(values, dtype=float)
-    diff = np.diff(values)
-    rollovers = np.where(diff < -period / 2)[0] + 1
-    offsets = np.zeros(len(values), dtype=float)
-    for idx in rollovers:
-        offsets[idx:] += period
+    if len(values) == 0:
+        return values
+    rollovers = np.diff(values) < -period / 2
+    offsets = np.concatenate([[0.0], np.cumsum(rollovers) * period])
     return values + offsets
 
 
@@ -63,65 +84,124 @@ def unwrap_counter(values: np.ndarray, bits: int = 32) -> np.ndarray:
     )
 
 
-def load_camera_csv(path: str | Path) -> pd.DataFrame:
-    """Load a Bonsai camera metadata CSV into a DataFrame.
-
-    The CSV written by the Bonsai workflow has no header; columns are:
-      frame_counter (int), timestamp_raw (float, seconds), gpio_state (int, optional)
+def decode_flycap_timestamp(raw: np.ndarray) -> np.ndarray:
+    """Decode packed FlyCapture ``embeddedTimeStamp`` words to seconds in [0, 128).
 
     Args:
-        path: Path to the ``.csv`` file written by Bonsai.
+        raw: 1-D array of uint32 register values.
 
     Returns:
-        DataFrame with columns inferred from column count.
+        Float seconds, still cyclic with a 128 s period (see ``unwrap_cyclic``).
     """
+    raw = np.asarray(raw, dtype=np.uint64)
+    sec = (raw >> np.uint64(25)) & np.uint64(0x7F)
+    count = (raw >> np.uint64(12)) & np.uint64(0x1FFF)
+    offset = raw & np.uint64(0xFFF)
+    return (
+        sec.astype(float)
+        + count.astype(float) / _FLYCAP_CYCLE_HZ
+        + offset.astype(float) / (_FLYCAP_CYCLE_HZ * _FLYCAP_OFFSET_PER_CYCLE)
+    )
+
+
+def decode_timestamps(raw: np.ndarray, driver: Driver = "flycap") -> np.ndarray:
+    """Convert a raw camera timestamp column to monotonic seconds.
+
+    Args:
+        raw: The ``timestamp_raw`` column.
+        driver: ``"flycap"`` (packed cycle timer, unwrapped over 128 s) or
+            ``"spinnaker"`` (nanoseconds).
+
+    Returns:
+        Float seconds on the camera clock.
+    """
+    _check_driver(driver)
+    if driver == "flycap":
+        return unwrap_cyclic(decode_flycap_timestamp(raw), period=_FLYCAP_TS_CYCLE_S)
+    return np.asarray(raw, dtype=np.uint64).astype(float) / 1e9
+
+
+def line_state(gpio: np.ndarray | pd.Series, bit: int) -> np.ndarray:
+    """Return the 0/1 level of one line from the ``gpio_state`` bitmask.
+
+    Args:
+        gpio: Raw line status words.
+        bit: Line bit to extract (FlyCapture barcode input: 31). The Spinnaker
+            ``ExposureEndLineStatusAll`` bit depends on the wiring and must be
+            confirmed on a recording.
+
+    Returns:
+        Integer array of 0/1.
+    """
+    words = np.asarray(gpio, dtype=np.uint64)
+    return ((words >> np.uint64(bit)) & np.uint64(1)).astype(int)
+
+
+def load_camera_csv(path: str | Path, driver: Driver = "flycap") -> pd.DataFrame:
+    """Load a Bonsai camera metadata CSV into a DataFrame.
+
+    The CSV has no header and three columns: ``gpio_state`` (line status
+    bitmask), ``timestamp_raw`` (camera timestamp as written) and
+    ``frame_counter``. See the module docstring for the per-driver fields.
+
+    Args:
+        path: Path to the ``.timestamps.csv`` file written by Bonsai.
+        driver: ``"flycap"`` or ``"spinnaker"``; both write the same column
+            order, the driver is checked here and used for decoding.
+
+    Returns:
+        DataFrame with ``frame_index`` followed by the three CSV columns.
+
+    Raises:
+        ValueError: If the file does not have three columns or the driver is
+            unknown.
+    """
+    _check_driver(driver)
     path = Path(path)
-    raw = pd.read_csv(path, header=None)
-
-    if raw.shape[1] == 2:
-        raw.columns = pd.Index(["frame_counter", "timestamp_raw"])
-    elif raw.shape[1] == 3:
-        raw.columns = pd.Index(["frame_counter", "timestamp_raw", "gpio_state"])
-    else:
-        raw.columns = pd.Index([f"col{i}" for i in range(raw.shape[1])])
-
+    raw = pd.read_csv(path, header=None, dtype=np.uint64)
+    if raw.shape[1] != len(CSV_COLUMNS):
+        raise ValueError(
+            f"{path.name}: expected {len(CSV_COLUMNS)} columns "
+            f"{CSV_COLUMNS}, found {raw.shape[1]}"
+        )
+    raw.columns = pd.Index(CSV_COLUMNS)
     raw.insert(0, "frame_index", np.arange(len(raw)))
     return raw
 
 
 def preprocess_camera_csv(
     path: str | Path,
-    ts_cycle_s: float = _FLYCAP_TS_CYCLE_S,
-    counter_bits: int = 32,
+    driver: Driver = "flycap",
+    counter_bits: int | None = None,
     session_start_s: float | None = None,
 ) -> pd.DataFrame:
-    """Full preprocessing pipeline for a Bonsai camera CSV.
+    """Load a Bonsai camera CSV and decode its timestamps.
 
     Steps:
-      1. Load CSV.
-      2. Unwrap cyclic hardware timestamps (remove 128-s rollovers for FlyCapture).
-      3. Unwrap frame counter rollovers.
+      1. Load the CSV (``load_camera_csv``).
+      2. Decode ``timestamp_raw`` per driver into ``timestamp_s``.
+      3. Unwrap the FlyCapture 32-bit frame counter.
       4. Optionally shift timestamps so t=0 is ``session_start_s``.
 
     Args:
         path: Path to Bonsai camera CSV.
-        ts_cycle_s: Timestamp rollover period in seconds (128.0 for FlyCapture;
-            set to ``np.inf`` for Spinnaker which does not cycle).
-        counter_bits: Bit width of frame counter (32 for FlyCapture, 32 for Spinnaker).
+        driver: ``"flycap"`` (default) or ``"spinnaker"``.
+        counter_bits: Frame counter width to unwrap. Default: 32 for FlyCapture,
+            no unwrapping for the 64-bit Spinnaker ``FrameID``.
         session_start_s: If given, subtract this from all timestamps so session t=0
             is the first behavioural event rather than camera power-on.
 
     Returns:
-        DataFrame with columns: ``frame_index``, ``timestamp_raw``, ``timestamp_s``
-        (unwrapped, optionally shifted), ``frame_counter`` (unwrapped), and any
-        additional columns (e.g. ``gpio_state``) from the original CSV.
+        DataFrame with ``frame_index``, ``gpio_state``, ``timestamp_raw``,
+        ``frame_counter`` and ``timestamp_s`` (seconds, monotonic, optionally
+        shifted).
     """
-    df = load_camera_csv(path)
+    df = load_camera_csv(path, driver=driver)
+    df["timestamp_s"] = decode_timestamps(df["timestamp_raw"].to_numpy(), driver)
 
-    ts_unwrapped = unwrap_cyclic(df["timestamp_raw"].to_numpy(), period=ts_cycle_s)
-    df["timestamp_s"] = ts_unwrapped
-
-    if "frame_counter" in df.columns:
+    if counter_bits is None and driver == "flycap":
+        counter_bits = 32
+    if counter_bits is not None:
         df["frame_counter"] = unwrap_counter(
             df["frame_counter"].to_numpy(), bits=counter_bits
         )
