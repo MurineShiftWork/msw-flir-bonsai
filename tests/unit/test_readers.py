@@ -173,3 +173,26 @@ def test_without_metadata_the_driver_is_flycap(tmp_path):
     session = load_session(tmp_path)
     assert session.cameras["top.0"].metadata is None
     assert session.cameras["top.0"].driver() == "flycap"
+
+
+def test_metadata_records_the_frame_rate_in_effect():
+    from msw_flir_bonsai.metadata import camera_metadata
+
+    flycap = camera_metadata(driver="flycap", workflow="w", cam_index=1, fps=None)
+    assert (flycap["camera_index"], flycap["fps"]) == (1, 60.0)
+    assert flycap["fps_source"] == "workflow default"
+    set_fps = camera_metadata(driver="flycap", workflow="w", cam_index=0, fps=30)
+    assert (set_fps["fps"], set_fps["fps_source"]) == (30.0, "cam1fps")
+    spin = camera_metadata(driver="spinnaker", workflow="w", cam_index=0, fps=None)
+    assert (spin["fps"], spin["fps_source"]) == (None, "camera user set")
+
+
+def test_barcodes_from_a_loaded_camera(tmp_path):
+    from msw_flir_bonsai.alignment import extract_camera_barcodes
+
+    _video(tmp_path, "top.0")
+    _timestamps(tmp_path, "top.0")
+    cam = load_session(tmp_path, load=True).cameras["top.0"]
+    assert extract_camera_barcodes(cam) == extract_camera_barcodes(cam.frames)
+    with pytest.raises(ValueError, match="no frames loaded"):
+        extract_camera_barcodes(load_session(tmp_path).cameras["top.0"])
