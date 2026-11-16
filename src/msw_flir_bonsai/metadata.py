@@ -21,6 +21,9 @@ from msw_flir_bonsai.timestamps import CSV_COLUMNS
 FORMAT_VERSION = 1
 SUFFIX = ".camera.json"
 
+#: Frame rate of the FlyCapture workflow when no ``cam1fps`` is passed.
+FLYCAP_WORKFLOW_FPS = 60.0
+
 #: Timestamp encoding of the CSV's ``timestamp_raw`` column, per driver.
 TIMESTAMP_ENCODING = {
     "flycap": "flycap_cycle_timer",  # packed uint32, 128 s period
@@ -44,6 +47,7 @@ def camera_metadata(
         "workflow": workflow,
         "camera_index": cam_index,
         "fps_requested": fps,
+        **_fps_in_effect(driver, fps),
         "csv_columns": list(CSV_COLUMNS),
         "timestamp_encoding": TIMESTAMP_ENCODING.get(driver, "unknown"),
     }
@@ -70,3 +74,16 @@ def read_camera_metadata(path: str | Path) -> dict[str, Any] | None:
         log.debug(f"camera metadata {path}: {exc}")
         return None
     return meta if isinstance(meta, dict) else None
+
+
+def _fps_in_effect(driver: str, fps: float | None) -> dict[str, Any]:
+    """The frame rate the camera runs at and where it comes from.
+
+    FlyCapture takes ``cam1fps`` or the workflow default. Spinnaker cannot be set from
+    the workflow: the camera's default user set decides, so the rate is not known here.
+    """
+    if driver == "flycap":
+        if fps is not None:
+            return {"fps": float(fps), "fps_source": "cam1fps"}
+        return {"fps": FLYCAP_WORKFLOW_FPS, "fps_source": "workflow default"}
+    return {"fps": None, "fps_source": "camera user set"}

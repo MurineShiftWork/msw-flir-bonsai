@@ -32,7 +32,7 @@ Typical workflow::
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -43,12 +43,29 @@ if TYPE_CHECKING:
 
     import pandas as pd
 
+    from msw_flir_bonsai.readers.session import FlirCamera
+
 # ---------------------------------------------------------------------------
 # Barcode extraction from camera GPIO
 
 
+def _frames_of(obj: Any) -> pd.DataFrame:
+    """``obj`` itself if it is a DataFrame, else its ``frames`` (a ``FlirCamera``)."""
+    import pandas as pd
+
+    if isinstance(obj, pd.DataFrame):
+        return obj
+    frames = getattr(obj, "frames", None)
+    if frames is None:
+        raise ValueError(
+            "no frames loaded: pass a DataFrame, or a camera from "
+            "load_session(..., load=True)"
+        )
+    return frames
+
+
 def extract_camera_barcodes(
-    df: pd.DataFrame,
+    df: pd.DataFrame | FlirCamera,
     gpio_col: str = "gpio_state",
     fps: float = 60.0,
     barcode_bit_duration_s: float = 0.1,
@@ -61,7 +78,8 @@ def extract_camera_barcodes(
     barcode values.
 
     Args:
-        df: Preprocessed camera DataFrame with ``timestamp_s`` and *gpio_col*.
+        df: Preprocessed camera DataFrame with ``timestamp_s`` and *gpio_col*, or a
+            ``FlirCamera`` from ``load_session(..., load=True)``.
         gpio_col: Column name holding the line status bitmask.
         fps: Camera frame rate used to compute bit window sizes.
         barcode_bit_duration_s: Duration of each barcode bit in seconds.
@@ -71,6 +89,7 @@ def extract_camera_barcodes(
     Returns:
         List of ``(time_s, barcode_int)`` tuples, one per detected barcode.
     """
+    df = _frames_of(df)
     if gpio_col not in df.columns:
         raise KeyError(
             f"GPIO column '{gpio_col}' not found. Available: {list(df.columns)}"
