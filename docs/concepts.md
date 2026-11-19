@@ -49,9 +49,13 @@ the value as a named argument.
   periods, indicating dropped frames
 
 `alignment.py` provides barcode and TTL-based alignment between camera timestamps and
-behaviour event times. `extract_camera_barcodes()` decodes TTL barcode pulses from a
-camera GPIO line (`line_bit`, 31 on FlyCapture); `align_barcodes()` maps camera frame indices to behaviour trial
-timestamps via matched barcode events.
+behaviour event times. `extract_camera_barcodes()` decodes the Bpod barcodes on a camera
+GPIO line (`line_bit`, 31 on FlyCapture) with ttl-barcoder's stream decoder, given the
+settings they were sent with. The line is sampled once per frame: a barcode starts half a
+frame before its first high frame, the init/end framing is checked only when the init
+pulses span two frames, and bits shorter than three frames are refused with a warning
+(most would decode to wrong values). `align_barcodes()` maps camera frame indices to
+behaviour trial timestamps via matched barcode events.
 
 ## MSW integration
 

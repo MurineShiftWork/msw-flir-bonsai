@@ -18,6 +18,8 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "pandas",
+    # the barcode decoder needs Python 3.11; on 3.10 the rest of the package still works
+    "ttl-barcoder>=0.6.0; python_version >= '3.11'",
     "typer",
 ]
 

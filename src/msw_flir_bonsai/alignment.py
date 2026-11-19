@@ -2,9 +2,9 @@
 
 Two alignment channels are available:
 
-1. **TTL barcodes**: periodic binary barcode pulses recorded both on the camera
-   GPIO input and on the Bpod BNC output.  A barcode sequence can be matched even
-   when partial (some bits missing) using Hamming-distance matching.
+1. **TTL barcodes**: the ttl-barcoder barcodes Bpod sends on a BNC output, recorded
+   on a camera GPIO input. They decode to the values Bpod logged, given the settings
+   they were sent with (init and bit lengths, bit count).
 
 2. **Trial TTL edges**: the sequence task (and others) pulse a BNC line at trial
    start/end.  The GPIO state column in the camera CSV captures these edges at
@@ -21,7 +21,7 @@ Typical workflow::
     # --- barcode alignment ---
     cam_df = preprocess_camera_csv("cam1.csv")
     bpod_barcodes = [...]  # list of (time_s, barcode_int) from Bpod events
-    cam_barcodes = extract_camera_barcodes(cam_df, line_bit=31)
+    cam_barcodes = extract_camera_barcodes(cam_df, barcode_config, line_bit=31)
     offset_s = align_barcodes(bpod_barcodes, cam_barcodes)
 
     # --- TTL-edge alignment (when barcode is absent/incomplete) ---
@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     import pandas as pd
+    from ttl_barcoder.core.config import BarcodeConfig
 
     from msw_flir_bonsai.readers.session import FlirCamera
 
@@ -66,62 +67,79 @@ def _frames_of(obj: Any) -> pd.DataFrame:
 
 def extract_camera_barcodes(
     df: pd.DataFrame | FlirCamera,
+    barcode_config: BarcodeConfig | None = None,
+    *,
     gpio_col: str = "gpio_state",
-    fps: float = 60.0,
-    barcode_bit_duration_s: float = 0.1,
     line_bit: int = FLYCAP_BARCODE_LINE_BIT,
+    inverted: bool = False,
 ) -> list[tuple[float, int]]:
-    """Extract binary barcodes from one line of the GPIO state column.
+    """Decode the barcodes on one camera GPIO line to the values Bpod sent.
 
-    A barcode is a fixed-length burst of high/low GPIO transitions.  This
-    function detects rising edges and groups subsequent bits into integer
-    barcode values.
+    The line is sampled once per frame, so its edges are the frames where its level
+    changes. Barcodes are found by their configured lengths (ttl-barcoder's stream
+    decoder) with the frame interval as the sampling interval: a barcode starts at its
+    first high frame, and the init/end framing is checked only when the init pulses
+    span at least two frames. Without framing, a long high pulse can decode as a
+    barcode; matching the values to Bpod's rejects it.
 
     Args:
         df: Preprocessed camera DataFrame with ``timestamp_s`` and *gpio_col*, or a
             ``FlirCamera`` from ``load_session(..., load=True)``.
+        barcode_config: The settings the barcodes were sent with (the session's
+            ``barcodes:``, or the task's barcode settings). None uses the ttl-barcoder
+            defaults, with a warning.
         gpio_col: Column name holding the line status bitmask.
-        fps: Camera frame rate used to compute bit window sizes.
-        barcode_bit_duration_s: Duration of each barcode bit in seconds.
         line_bit: Bit of the barcode line in *gpio_col* (31 on FlyCapture; the
             Spinnaker bit depends on the wiring).
+        inverted: The line reads low while the Bpod output is high.
 
     Returns:
-        List of ``(time_s, barcode_int)`` tuples, one per detected barcode.
+        ``(time_s, value)`` per barcode: half a frame before its first high frame.
+        Empty, with a warning, when a bit is shorter than three frames: over random
+        frame phases most such barcodes decode to wrong values (35 ms bits at 60 fps
+        decode exactly about a quarter of the time).
     """
+    from ttl_barcoder.core.barcode_ttl import BarcodeTTL
+    from ttl_barcoder.core.config import BarcodeConfig
+
     df = _frames_of(df)
     if gpio_col not in df.columns:
         raise KeyError(
             f"GPIO column '{gpio_col}' not found. Available: {list(df.columns)}"
         )
+    if barcode_config is None:
+        barcode_config = BarcodeConfig.default()
+        logging.warning(
+            "No barcode settings given: decoding camera barcodes with the "
+            "ttl-barcoder defaults (%s)",
+            barcode_config,
+        )
 
-    gpio = line_state(df[gpio_col].to_numpy(), line_bit)
-    ts = df["timestamp_s"].to_numpy()
-    frames_per_bit = max(1, int(round(fps * barcode_bit_duration_s)))
+    level = line_state(df[gpio_col].to_numpy(), line_bit).astype(bool)
+    if inverted:
+        level = ~level
+    ts = df["timestamp_s"].to_numpy(dtype=float)
+    if len(ts) < 2:
+        return []
+    frame_s = float(np.median(np.diff(ts)))
+    if barcode_config.bit_duration_ms / 1000 < 3 * frame_s:
+        logging.warning(
+            "Camera barcodes not decoded: %.0f ms bits are shorter than three frames "
+            "(%.1f fps). Send longer barcodes to this camera.",
+            barcode_config.bit_duration_ms,
+            1 / frame_s,
+        )
+        return []
 
-    rising = np.where((gpio[1:] == 1) & (gpio[:-1] == 0))[0] + 1
-    barcodes: list[tuple[float, int]] = []
-    used: set[int] = set()
-
-    for edge in rising:
-        if edge in used:
-            continue
-        bits: list[int] = []
-        pos = edge
-        while pos < len(gpio):
-            window = gpio[pos : pos + frames_per_bit]
-            if len(window) < frames_per_bit // 2:
-                break
-            bits.append(int(window.mean() > 0.5))
-            used.update(range(pos, pos + frames_per_bit))
-            pos += frames_per_bit
-            if len(bits) >= 32:
-                break
-        if bits:
-            value = int("".join(str(b) for b in bits), 2)
-            barcodes.append((float(ts[edge]), value))
-
-    return barcodes
+    # Only level changes are edges: a line already high at the first frame has no
+    # rising edge there, so no barcode can start at it.
+    changes = np.flatnonzero(np.diff(level)) + 1
+    edge_times = ts[changes].tolist()
+    edge_levels = level[changes].tolist()
+    found = BarcodeTTL(barcode_config).find_barcodes(
+        edge_times, edge_levels, sample_interval_s=frame_s
+    )
+    return [(b.start_s, b.value) for b in found]
 
 
 # ---------------------------------------------------------------------------
