@@ -18,6 +18,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "pandas",
+    "ttl-barcoder>=0.6.0",
     "typer",
 ]
 

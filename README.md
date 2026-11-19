@@ -161,13 +161,16 @@ Two channels link camera frames to Bpod behaviour timestamps:
 
 ### 1. TTL barcodes
 
-Periodic binary barcode pulses recorded on both the camera GPIO and the Bpod BNC output.
-Partial barcodes are handled via Hamming-distance matching (up to 2 bit errors tolerated).
+ttl-barcoder barcodes from a Bpod BNC output, recorded on a camera GPIO line. They decode
+to the values Bpod logged, given the settings they were sent with; bits need about three
+frames (100 ms bits for a 60 fps camera).
 
 ```python
+from ttl_barcoder import BarcodeConfig
 from msw_flir_bonsai.alignment import extract_camera_barcodes, align_barcodes
 
-cam_barcodes = extract_camera_barcodes(df, line_bit=31)  # [(time_s, value), ...]
+config = BarcodeConfig(bit_duration_ms=100, init_duration_ms=100)  # as sent
+cam_barcodes = extract_camera_barcodes(df, config, line_bit=31)  # [(time_s, value), ...]
 bpod_barcodes = [...]                               # from Bpod session data
 offset_s = align_barcodes(bpod_barcodes, cam_barcodes)
 df["timestamp_bpod"] = df["timestamp_s"] + offset_s

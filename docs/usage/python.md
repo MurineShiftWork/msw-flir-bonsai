@@ -120,10 +120,16 @@ confirm it on a recording and pass it explicitly.
 
 ### Barcode alignment
 
+The camera must decode with the settings Bpod sent the barcodes with (the session's
+`barcodes:`, or the task's barcode settings). Bits need about three frames: 100 ms bits
+for a 60 fps camera. Shorter bits are refused with a warning.
+
 ```python
+from ttl_barcoder import BarcodeConfig
 from msw_flir_bonsai.alignment import extract_camera_barcodes, align_barcodes
 
-cam_barcodes = extract_camera_barcodes(df, fps=60.0, line_bit=31)
+config = BarcodeConfig(bit_duration_ms=100, init_duration_ms=100)
+cam_barcodes = extract_camera_barcodes(df, config, line_bit=31)
 # bpod_barcodes: list of (time_s, barcode_int) from Bpod BNC events
 offset_s = align_barcodes(bpod_barcodes, cam_barcodes, max_hamming=2)
 
