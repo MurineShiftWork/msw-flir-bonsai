@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Python 3.10 or later
+- Python 3.11 or later
 - Windows 10/11 (the Bonsai workflows and camera SDKs are Windows-only)
 - [Bonsai](https://bonsai-rx.org/) installed (the `.exe` is called by the runner)
 - A FLIR camera with either the **FlyCapture2** or **Spinnaker** SDK installed

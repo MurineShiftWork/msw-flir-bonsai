@@ -22,6 +22,8 @@ from pathlib import Path
 
 import typer
 
+from msw_flir_bonsai.runner import BONSAI_SEARCH_PATHS, discover_bonsai
+
 app = typer.Typer(
     name="flir",
     help="FLIR camera tools: launch Bonsai workflows, inspect hardware.",
@@ -29,11 +31,7 @@ app = typer.Typer(
 )
 
 # Known Bonsai.exe install paths on Windows (searched in order).
-_BONSAI_SEARCH_PATHS = [
-    Path.home() / "AppData" / "Local" / "Bonsai" / "Bonsai.exe",
-    Path("C:/Program Files/Bonsai/Bonsai.exe"),
-    Path("C:/Program Files (x86)/Bonsai/Bonsai.exe"),
-]
+_BONSAI_SEARCH_PATHS = BONSAI_SEARCH_PATHS
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +40,7 @@ _BONSAI_SEARCH_PATHS = [
 
 def _discover_bonsai() -> Path | None:
     """First existing Bonsai.exe in the known install locations, or None."""
-    return next((p for p in _BONSAI_SEARCH_PATHS if p.exists()), None)
+    return discover_bonsai(_BONSAI_SEARCH_PATHS)
 
 
 @app.command("find-bonsai")

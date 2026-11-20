@@ -18,6 +18,12 @@ Camera identity before launch: serials per SDK index, with a USB fallback.
 
 ::: msw_flir_bonsai.probe.ProbeResult
 
+## msw_flir_bonsai.msw
+
+MSW camera backend (`msw.camera` entry point `flir_bonsai`).
+
+::: msw_flir_bonsai.msw.FlirBonsaiBackend
+
 ## msw_flir_bonsai.timestamps
 
 Preprocessing utilities for Bonsai camera CSVs.

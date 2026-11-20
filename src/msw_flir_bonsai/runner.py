@@ -34,6 +34,12 @@ from pathlib import Path
 from msw_flir_bonsai.bonsai_workflows import workflow_path
 
 _BONSAI_EXE_ENV = "BONSAI_EXE"
+#: Known Bonsai.exe install locations on Windows, searched in order.
+BONSAI_SEARCH_PATHS = [
+    Path.home() / "AppData" / "Local" / "Bonsai" / "Bonsai.exe",
+    Path("C:/Program Files/Bonsai/Bonsai.exe"),
+    Path("C:/Program Files (x86)/Bonsai/Bonsai.exe"),
+]
 _STARTUP_POLL_INTERVAL = 0.5
 _STARTUP_TIMEOUT = 30.0
 # A start succeeds when the camera's .avi has data: the first frame. Not the
@@ -49,6 +55,13 @@ _EARLY_EXIT_RETRY_DELAY_S = 3.0
 
 class BonsaiStartError(RuntimeError):
     """A Bonsai camera process did not write its first frame."""
+
+
+def discover_bonsai(search_paths: list[Path] | None = None) -> Path | None:
+    """First existing Bonsai.exe in ``search_paths`` (the known install
+    locations by default), or None."""
+    paths = BONSAI_SEARCH_PATHS if search_paths is None else search_paths
+    return next((p for p in paths if p.exists()), None)
 
 
 def _find_bonsai_exe(bonsai_exe: str | Path | None = None) -> str:

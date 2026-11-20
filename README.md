@@ -125,6 +125,37 @@ cameras before launching Bonsai and refuses to start on a mismatch. See
 [CLI reference: probe-cameras](docs/usage/cli.md#probe-cameras) for the fields and
 how to verify it on a rig.
 
+### MSW camera backend (`flir_bonsai`)
+
+The package registers `FlirBonsaiBackend` under the `msw.camera` entry point as
+`flir_bonsai`, so an MSW setup selects it by name:
+
+```yaml
+cameras:
+  - name: behaviour
+    backend: flir_bonsai
+    units:
+      - {name: top, hw_id: "12345678", index: 0}   # hw_id: camera serial
+      - {name: back, index: 1}
+    settings: {driver: flycap, bonsai_exe: C:\Bonsai\Bonsai.exe}
+```
+
+- **Settings:** `driver` (`flycap` or `spinnaker`), `bonsai_exe` (else `BONSAI_EXE`,
+  else the `find-bonsai` locations), `workflow` (default `run-flir-<driver>-1cam`) and
+  `n_cameras` (cameras `cam0..` when no units are listed). Per camera: `index` and the
+  optional serial as `hw_id`. Unknown keys, and a `Bonsai.exe` that does not resolve,
+  are a configuration error.
+- **Preflight** reports every camera `failed` (`bonsai_not_found`) when `Bonsai.exe`
+  has gone since configuration. It probes the connected cameras. A camera whose serial is not connected,
+  or which has no camera left, is `missing` and never launched; FlyCapture launches
+  at the serial's SDK index, Spinnaker by serial. Without a probe answer every camera
+  is launched by its configured index.
+- **Start** runs one Bonsai per camera and reports each as `recording` once its first
+  frame is written, else `failed`; the other cameras keep recording.
+- **Stop** reports `stopped` when Bonsai exited after the stop request and the
+  timestamps file has data, else `failed` with the exit code.
+- Files are `<acq basename>.msw.<name>.<index>.avi` and `.timestamps.csv`.
+
 ---
 
 ## Output files

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +42,7 @@ def camera_metadata(
     return {
         "format_version": FORMAT_VERSION,
         "writer": f"msw-flir-bonsai {__version__}",
-        "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "started": datetime.now(UTC).isoformat(timespec="seconds"),
         "driver": driver,
         "workflow": workflow,
         "camera_index": cam_index,
