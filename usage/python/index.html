@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -892,18 +892,48 @@ and called via the four-method <code>CameraClient</code> protocol:</p>
 <p>See the <a href="https://larsrollik.github.io/murineshiftwork/setup/">murineshiftwork setup config docs</a> for the full YAML reference.</p>
 <hr />
 <h2 id="preprocessing-camera-timestamps">Preprocessing camera timestamps<a class="headerlink" href="#preprocessing-camera-timestamps" title="Permanent link">&para;</a></h2>
-<p>Bonsai writes a CSV per camera with frame counter, hardware timestamp, and
-optionally a GPIO state column.  The timestamps module cleans up rollovers.</p>
+<p>Bonsai writes a headerless CSV per camera with three columns, in this order:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>FlyCapture</th>
+<th>Spinnaker</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gpio_state</code></td>
+<td><code>embeddedGPIOPinState</code></td>
+<td><code>ExposureEndLineStatusAll</code></td>
+</tr>
+<tr>
+<td><code>timestamp_raw</code></td>
+<td><code>embeddedTimeStamp</code> (packed cycle timer)</td>
+<td><code>Timestamp</code> (ns)</td>
+</tr>
+<tr>
+<td><code>frame_counter</code></td>
+<td><code>embeddedFrameCounter</code></td>
+<td><code>FrameID</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>preprocess_camera_csv</code> decodes <code>timestamp_raw</code> per driver into <code>timestamp_s</code>.
+FlyCapture packs seconds mod 128 (bits 31-25), 8 kHz cycles (bits 24-12) and
+1/3072 cycle offsets (bits 11-0); the 128 s rollover is unwrapped. Spinnaker
+nanoseconds are divided by 1e9.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.timestamps</span><span class="w"> </span><span class="kn">import</span> <span class="n">preprocess_camera_csv</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">df</span> <span class="o">=</span> <span class="n">preprocess_camera_csv</span><span class="p">(</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">"cam0__20260524_120000.csv"</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">ts_cycle_s</span><span class="o">=</span><span class="mf">128.0</span><span class="p">,</span>       <span class="c1"># FlyCapture cycle period; np.inf for Spinnaker</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">counter_bits</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">session_start_s</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>   <span class="c1"># or a Bpod event time to zero the clock</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># df columns: frame_index, timestamp_raw, timestamp_s, frame_counter, gpio_state</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">"cam0.timestamps.csv"</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">driver</span><span class="o">=</span><span class="s2">"flycap"</span><span class="p">,</span>        <span class="c1"># or "spinnaker"</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">session_start_s</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>   <span class="c1"># or a Bpod event time to zero the clock</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># df columns: frame_index, gpio_state, timestamp_raw, frame_counter, timestamp_s</span>
 </code></pre></div>
+<p><code>gpio_state</code> is the bitmask of all camera lines. Read one line with
+<code>line_state(df["gpio_state"], bit)</code>; the FlyCapture barcode input is bit 31.</p>
 <h3 id="detect-dropped-frames">Detect dropped frames<a class="headerlink" href="#detect-dropped-frames" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.timestamps</span><span class="w"> </span><span class="kn">import</span> <span class="n">detect_dropped_frames</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
@@ -913,20 +943,28 @@ optionally a GPIO state column.  The timestamps module cleans up rollovers.</p>
 </code></pre></div>
 <hr />
 <h2 id="aligning-camera-timestamps-to-bpod">Aligning camera timestamps to Bpod<a class="headerlink" href="#aligning-camera-timestamps-to-bpod" title="Permanent link">&para;</a></h2>
+<p>Both functions read one line of <code>gpio_state</code>, chosen by <code>line_bit</code> (default 31,
+the FlyCapture barcode input). The Spinnaker line bit depends on the wiring:
+confirm it on a recording and pass it explicitly.</p>
 <h3 id="barcode-alignment">Barcode alignment<a class="headerlink" href="#barcode-alignment" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.alignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_camera_barcodes</span><span class="p">,</span> <span class="n">align_barcodes</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">cam_barcodes</span> <span class="o">=</span> <span class="n">extract_camera_barcodes</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">gpio_col</span><span class="o">=</span><span class="s2">"gpio_state"</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mf">60.0</span><span class="p">)</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># bpod_barcodes: list of (time_s, barcode_int) from Bpod BNC events</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">offset_s</span> <span class="o">=</span> <span class="n">align_barcodes</span><span class="p">(</span><span class="n">bpod_barcodes</span><span class="p">,</span> <span class="n">cam_barcodes</span><span class="p">,</span> <span class="n">max_hamming</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">df</span><span class="p">[</span><span class="s2">"bpod_time"</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">"timestamp_s"</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset_s</span>
+<p>The camera must decode with the settings Bpod sent the barcodes with (the session's
+<code>barcodes:</code>, or the task's barcode settings). Bits need about three frames: 100 ms bits
+for a 60 fps camera. Shorter bits are refused with a warning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ttl_barcoder</span><span class="w"> </span><span class="kn">import</span> <span class="n">BarcodeConfig</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.alignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">extract_camera_barcodes</span><span class="p">,</span> <span class="n">align_barcodes</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">BarcodeConfig</span><span class="p">(</span><span class="n">bit_duration_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">init_duration_ms</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">cam_barcodes</span> <span class="o">=</span> <span class="n">extract_camera_barcodes</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">line_bit</span><span class="o">=</span><span class="mi">31</span><span class="p">)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># bpod_barcodes: list of (time_s, barcode_int) from Bpod BNC events</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">offset_s</span> <span class="o">=</span> <span class="n">align_barcodes</span><span class="p">(</span><span class="n">bpod_barcodes</span><span class="p">,</span> <span class="n">cam_barcodes</span><span class="p">,</span> <span class="n">max_hamming</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">df</span><span class="p">[</span><span class="s2">"bpod_time"</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">"timestamp_s"</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset_s</span>
 </code></pre></div>
 <h3 id="ttl-edge-alignment-fallback">TTL-edge alignment (fallback)<a class="headerlink" href="#ttl-edge-alignment-fallback" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.alignment</span><span class="w"> </span><span class="kn">import</span> <span class="n">align_ttl_edges</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># bpod_trial_times: list of trial-start times in Bpod clock</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">offset_s</span> <span class="o">=</span> <span class="n">align_ttl_edges</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">bpod_trial_times</span><span class="p">,</span> <span class="n">gpio_col</span><span class="o">=</span><span class="s2">"gpio_state"</span><span class="p">)</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">offset_s</span> <span class="o">=</span> <span class="n">align_ttl_edges</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">bpod_trial_times</span><span class="p">,</span> <span class="n">line_bit</span><span class="o">=</span><span class="mi">31</span><span class="p">)</span>
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">df</span><span class="p">[</span><span class="s2">"bpod_time"</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">"timestamp_s"</span><span class="p">]</span> <span class="o">+</span> <span class="n">offset_s</span>
 </code></pre></div>
 
@@ -984,10 +1022,10 @@ optionally a GPIO state column.  The timestamps module cleans up rollovers.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -478,6 +478,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#probe-cameras" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        probe-cameras
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="probe-cameras">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#naming-cameras-by-serial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming cameras by serial
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-on-a-rig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying on a rig
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -647,6 +686,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#probe-cameras" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        probe-cameras
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="probe-cameras">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#naming-cameras-by-serial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming cameras by serial
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-on-a-rig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying on a rig
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -717,9 +795,97 @@ wrapper to be installed.  These are Windows-only native libraries.</p>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  [1]  serial=87654321  model=Chameleon3 CM3-U3-13Y3M
 </code></pre></div></p>
 <p>The index shown is the value to pass as <code>cameras.cam_index</code> or <code>--cam-index</code>.</p>
+<h2 id="probe-cameras">probe-cameras<a class="headerlink" href="#probe-cameras" title="Permanent link">&para;</a></h2>
+<p>Print the index and serial of each connected camera without opening it, so a
+setup can name its cameras by serial instead of by enumeration index.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>msw-flir probe-cameras --driver flycap
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>msw-flir probe-cameras --driver spinnaker --json
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--driver</code>, <code>-d</code></td>
+<td><code>flycap</code></td>
+<td><code>flycap</code> or <code>spinnaker</code></td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>off</td>
+<td>Print <code>{driver, source, count, cameras: [{index, serial}], error}</code></td>
+</tr>
+<tr>
+<td><code>--timeout</code></td>
+<td><code>10</code></td>
+<td>Seconds before the SDK probe is killed</td>
+</tr>
+</tbody>
+</table>
+<p><code>source</code> says where the answer came from:</p>
+<ul>
+<li><code>sdk</code>: the FlyCapture2 or Spinnaker C library (<code>FlyCapture2_C.dll</code>,
+  <code>SpinnakerC_v140.dll</code>), loaded through ctypes in a child process. No Python
+  SDK wrapper is needed. Index and serial per camera.</li>
+<li><code>usb</code>: the SDK was missing, crashed or hung. Windows PnP devices from vendor
+  <code>0x1E10</code>: count and serials, no index order. Only the parent "USB Composite
+  Device" (<code>USB\VID_1E10&amp;PID_xxxx\&lt;serial&gt;</code>) counts; its serial is hex and is
+  reported in decimal, like the SDK (hex <code>00BC614E</code> is serial <code>12345678</code>).</li>
+<li><code>none</code>: neither worked; exits 1.</li>
+</ul>
+<p>The C library is searched in <code>MSW_FLIR_FC2_DLL</code> / <code>MSW_FLIR_SPIN_DLL</code> (full
+path), then on the DLL search path, then in the default <code>Program Files</code>
+install directories.</p>
+<div class="admonition note">
+<p class="admonition-title">Spinnaker probe untested</p>
+<p>The FlyCapture2 probe is checked on Flea3 USB3 cameras. The Spinnaker probe
+(DLL names, install folders, function calls) has not run on hardware yet.</p>
+</div>
+<h3 id="naming-cameras-by-serial">Naming cameras by serial<a class="headerlink" href="#naming-cameras-by-serial" title="Permanent link">&para;</a></h3>
+<p>Add <code>serial</code> to each camera in the setup YAML (msw-core <code>CameraUnit</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">cameras</span><span class="p">:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">backend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">flir_bonsai</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">driver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">flycap</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">cameras</span><span class="p">:</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">top</span><span class="p p-Indicator">,</span><span class="nt"> serial</span><span class="p">:</span><span class="w"> </span><span class="s">"12345678"</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">index</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">side</span><span class="p p-Indicator">,</span><span class="nt"> serial</span><span class="p">:</span><span class="w"> </span><span class="s">"87654321"</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p>Before Bonsai starts, <code>resolve_camera_units</code> checks the probe against the
+setup. FlyCapture launches each camera at the index the SDK reports for its
+serial; Spinnaker passes the serial to Bonsai (<code>cam1serial</code>). A serial that is
+not connected, or fewer cameras than the setup needs, refuses the start. With
+no serials configured only the count is checked. With source <code>none</code> it warns
+and launches by configured index. With source <code>usb</code> serials are checked too,
+but FlyCapture keeps the configured index.</p>
+<p>A camera has started when its first frame is in <code>&lt;cam_basename&gt;.avi</code> (the file
+has data, about 5 s after launch). The other signals mislead: Bonsai's return
+code is 0 when it finds no camera (it exits about 4 to 5 s after launch), and
+the timestamps CSV stays 0 B until its first 4 KB block, several seconds of
+frames. The start fails (<code>BonsaiStartError</code>) when Bonsai exits before the first
+frame, at any time, or when <code>start_timeout</code> (15 s) passes without one; Bonsai
+is then stopped. After an exit without a frame the camera can still be held for
+a few seconds, so Bonsai is relaunched once after 3 s (<code>retry_delay</code>), unless
+the caller passes <code>expect_present=False</code> because the probe did not see the
+camera. <code>MultiCameraRunner.start</code> waits for all cameras against one deadline
+and stops them all if one fails.</p>
+<h3 id="verifying-on-a-rig">Verifying on a rig<a class="headerlink" href="#verifying-on-a-rig" title="Permanent link">&para;</a></h3>
+<ol>
+<li><code>msw flir probe-cameras -d flycap</code> (and <code>-d spinnaker</code>): <code>source</code> should be
+   <code>sdk</code> and the serials should match the camera labels.</li>
+<li>Unplug one camera and run it again: the count drops and the remaining
+   serial keeps its identity even when its index changes.</li>
+<li>List the USB devices with
+   <code>Get-PnpDevice -PresentOnly | ? InstanceId -like 'USB\VID_1E10*'</code> in
+   PowerShell: the entry without <code>MI_</code> ends in the hex serial.</li>
+</ol>
 <h2 id="run">run<a class="headerlink" href="#run" title="Permanent link">&para;</a></h2>
 <p>Launch N independent Bonsai camera subprocesses (one per camera index).</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>msw-flir run &lt;output_dir&gt; &lt;session&gt; [options]
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>msw-flir run &lt;output_dir&gt; &lt;session&gt; [options]
 </code></pre></div>
 <p><strong>Arguments:</strong></p>
 <table>
@@ -780,11 +946,15 @@ wrapper to be installed.  These are Windows-only native libraries.</p>
 <p>Each camera uses the 1-cam Bonsai workflow with its own <code>cam_index</code>.  Press
 <code>Ctrl+C</code> to stop all cameras cleanly.</p>
 <p><strong>Example:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>msw-flir run D:\DATA\video mouse001__20260524 --n-cameras 2 --fps 60
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>msw-flir run D:\DATA\video mouse001__20260524 --n-cameras 2 --fps 60
 </code></pre></div>
 <h2 id="test-record">test-record<a class="headerlink" href="#test-record" title="Permanent link">&para;</a></h2>
-<p>Run a short test recording from a single camera to verify the setup.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>msw-flir test-record [options]
+<p>Run a short test recording from a single camera to verify the setup.
+The duration counts from the first frame. Bonsai exits 0 even when it could
+not record, so the command judges the outcome itself: it exits 1 when no frame
+arrives, when Bonsai exited before the stop was requested (at any time), or
+when <code>&lt;session&gt;.timestamps.csv</code> is missing or empty.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>msw-flir test-record [options]
 </code></pre></div>
 <p><strong>Options:</strong></p>
 <table>
@@ -812,7 +982,7 @@ wrapper to be installed.  These are Windows-only native libraries.</p>
 <td>Camera index</td>
 </tr>
 <tr>
-<td><code>--driver</code></td>
+<td><code>--driver</code>, <code>-d</code></td>
 <td><code>flycap</code></td>
 <td>Camera driver</td>
 </tr>
@@ -828,7 +998,7 @@ wrapper to be installed.  These are Windows-only native libraries.</p>
 </tr>
 <tr>
 <td><code>--bonsai-exe</code></td>
-<td><code>$BONSAI_EXE</code></td>
+<td><code>$BONSAI_EXE</code>, then the <code>find-bonsai</code> locations</td>
 <td>Path to <code>Bonsai.exe</code></td>
 </tr>
 <tr>
@@ -839,7 +1009,7 @@ wrapper to be installed.  These are Windows-only native libraries.</p>
 </tbody>
 </table>
 <p><strong>Example:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>msw-flir test-record --cam-index 1 --driver spinnaker --duration 10
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>msw-flir test-record --cam-index 1 --driver spinnaker --duration 10
 </code></pre></div>
 
 
@@ -896,10 +1066,10 @@ wrapper to be installed.  These are Windows-only native libraries.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

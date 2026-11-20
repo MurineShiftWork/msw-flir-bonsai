@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -789,7 +789,7 @@
 <h1 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h1>
 <h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Python 3.10 or later</li>
+<li>Python 3.11 or later</li>
 <li>Windows 10/11 (the Bonsai workflows and camera SDKs are Windows-only)</li>
 <li><a href="https://bonsai-rx.org/">Bonsai</a> installed (the <code>.exe</code> is called by the runner)</li>
 <li>A FLIR camera with either the <strong>FlyCapture2</strong> or <strong>Spinnaker</strong> SDK installed</li>
@@ -838,7 +838,7 @@ creating a <code>BonsaiCameraRunner</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>msw-flir<span class="w"> </span>test-record<span class="w"> </span>--cam-index<span class="w"> </span><span class="m">0</span><span class="w"> </span>--driver<span class="w"> </span>flycap<span class="w"> </span>--fps<span class="w"> </span><span class="m">30</span><span class="w"> </span>--duration<span class="w"> </span><span class="m">5</span>
 </code></pre></div>
 <p>Output is written to <code>~/msw_flir_test/</code> by default.  You should see a <code>.avi</code>
-video file and a <code>.csv</code> metadata file (frame counter, timestamp, GPIO state).</p>
+video file and a <code>.csv</code> metadata file (GPIO state, timestamp, frame counter).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Check the CSV has the expected columns</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>python<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="s">from msw_flir_bonsai.timestamps import load_camera_csv</span>
@@ -847,8 +847,8 @@ video file and a <code>.csv</code> metadata file (frame counter, timestamp, GPIO
 <a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="s">print(df.columns.tolist())</span>
 <a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="s">EOF</span>
 </code></pre></div>
-<p>Expected columns: <code>frame_index</code>, <code>frame_counter</code>, <code>timestamp_raw</code>, <code>gpio_state</code>
-(the last column is present only when a GPIO line is connected).</p>
+<p>Expected columns: <code>frame_index</code>, <code>gpio_state</code>, <code>timestamp_raw</code>, <code>frame_counter</code>.
+Pass <code>driver="spinnaker"</code> for Spinnaker recordings.</p>
 <h2 id="first-camera-connection-from-python">First camera connection from Python<a class="headerlink" href="#first-camera-connection-from-python" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">msw_flir_bonsai.runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">BonsaiCameraRunner</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
@@ -867,7 +867,7 @@ video file and a <code>.csv</code> metadata file (frame counter, timestamp, GPIO
 <a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
 <a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1"># ... wait, run behaviour task, etc. ...</span>
 <a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">runner</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>         <span class="c1"># sends SIGTERM; Bonsai flushes open files before exiting</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">runner</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>         <span class="c1"># asks Bonsai to finish; it flushes and closes its files</span>
 <a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="n">runner</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
 </code></pre></div>
 <p>This is the full acquisition lifecycle.  For multi-camera setups see
@@ -927,10 +927,10 @@ video file and a <code>.csv</code> metadata file (frame counter, timestamp, GPIO
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

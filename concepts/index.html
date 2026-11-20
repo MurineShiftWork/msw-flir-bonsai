@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -739,18 +739,23 @@ the value as a named argument.</p>
 <h2 id="timestamp-alignment">Timestamp alignment<a class="headerlink" href="#timestamp-alignment" title="Permanent link">&para;</a></h2>
 <p><code>timestamps.py</code> provides utilities for working with camera frame timestamps:</p>
 <ul>
-<li><code>load_camera_csv(path)</code>: reads the Bonsai-generated CSV with a <code>Timestamp</code> column</li>
+<li><code>load_camera_csv(path, driver)</code>: reads the headerless Bonsai CSV as
+  <code>gpio_state</code>, <code>timestamp_raw</code>, <code>frame_counter</code></li>
 <li><code>unwrap_cyclic(timestamps)</code> / <code>unwrap_counter(timestamps)</code>: corrects for hardware
   counter rollover in raw timestamp streams</li>
-<li><code>preprocess_camera_csv(path)</code>: convenience wrapper that loads, unwraps, and returns
-  a clean timestamp array</li>
+<li><code>preprocess_camera_csv(path, driver)</code>: loads the CSV and decodes the timestamps per
+  driver (FlyCapture packed cycle timer, Spinnaker nanoseconds) into <code>timestamp_s</code></li>
 <li><code>detect_dropped_frames(timestamps, fps)</code>: identifies gaps larger than 1.5 frame
   periods, indicating dropped frames</li>
 </ul>
 <p><code>alignment.py</code> provides barcode and TTL-based alignment between camera timestamps and
-behaviour event times. <code>extract_camera_barcodes()</code> decodes TTL barcode pulses from a
-camera GPIO channel; <code>align_barcodes()</code> maps camera frame indices to behaviour trial
-timestamps via matched barcode events.</p>
+behaviour event times. <code>extract_camera_barcodes()</code> decodes the Bpod barcodes on a camera
+GPIO line (<code>line_bit</code>, 31 on FlyCapture) with ttl-barcoder's stream decoder, given the
+settings they were sent with. The line is sampled once per frame: a barcode starts half a
+frame before its first high frame, the init/end framing is checked only when the init
+pulses span two frames, and bits shorter than three frames are refused with a warning
+(most would decode to wrong values). <code>align_barcodes()</code> maps camera frame indices to
+behaviour trial timestamps via matched barcode events.</p>
 <h2 id="msw-integration">MSW integration<a class="headerlink" href="#msw-integration" title="Permanent link">&para;</a></h2>
 <p>In MSW tasks, camera acquisition is managed by the task framework:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">murineshiftwork.hardware.camera.client</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_camera_client</span>
@@ -819,10 +824,10 @@ and implements the <code>CameraClientProtocol</code> expected by <code>TaskProce
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

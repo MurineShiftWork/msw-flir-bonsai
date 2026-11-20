@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -546,10 +546,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#keyboard-shortcuts-in-the-workflow" class="md-nav__link">
+  <a href="#bundled-extension-workflows" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Keyboard shortcuts in the workflow
+        Bundled extension workflows
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#live-preview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live preview
       
     </span>
   </a>
@@ -698,10 +709,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#keyboard-shortcuts-in-the-workflow" class="md-nav__link">
+  <a href="#bundled-extension-workflows" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Keyboard shortcuts in the workflow
+        Bundled extension workflows
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#live-preview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live preview
       
     </span>
   </a>
@@ -836,6 +858,12 @@ used by the Python runner.</p>
 <td>Camera index (0-based)</td>
 </tr>
 <tr>
+<td><code>cam1serial</code></td>
+<td>string</td>
+<td><strong>spinnaker only</strong> (1cam)</td>
+<td>Camera serial; when set, <code>SpinnakerCapture</code> selects by <code>SerialNumber</code> and ignores <code>cam1idx</code></td>
+</tr>
+<tr>
 <td><code>cam1fps</code></td>
 <td>int</td>
 <td><strong>flycap only</strong></td>
@@ -870,13 +898,46 @@ immediately without user interaction:</p>
 </code></pre></div>
 <ul>
 <li><strong>Start</strong>: the <code>--start</code> flag; no keyboard or socket needed.</li>
-<li><strong>Stop</strong>: <code>process.terminate()</code> → Bonsai catches the signal, flushes open
-  files, and exits cleanly.</li>
+<li><strong>Stop</strong>: <code>stop()</code> creates a stop file whose path is passed to Bonsai in
+  <code>MSW_BONSAI_STOP_FILE</code>. <code>Extensions\key-ctrl-stop.bonsai</code> checks for it every
+  0.2 s (and for the caller's process, <code>MSW_BONSAI_PARENT_PID</code>, having exited)
+  and then completes the stream, so the video and CSV writers flush and close
+  and Bonsai exits on its own. If that does not happen within the timeout, the
+  process is killed; on Windows the whole process tree (<code>taskkill /T</code>), because
+  <code>Bonsai.exe</code> relaunches itself as a child worker.</li>
+<li>Bonsai runs in its own process group, so a Ctrl+C in the calling console does
+  not reach it before the caller has shut down and requested the stop.</li>
 </ul>
-<h3 id="keyboard-shortcuts-in-the-workflow">Keyboard shortcuts in the workflow<a class="headerlink" href="#keyboard-shortcuts-in-the-workflow" title="Permanent link">&para;</a></h3>
-<p>The workflow XML references <code>Extensions\key-ctrl-start.bonsai</code> and
-<code>Extensions\key-ctrl-stop.bonsai</code>.  These are Bonsai editor UI bindings :
-they are <strong>inactive in <code>--no-editor</code> mode</strong> and can be ignored.</p>
+<h3 id="bundled-extension-workflows">Bundled extension workflows<a class="headerlink" href="#bundled-extension-workflows" title="Permanent link">&para;</a></h3>
+<p>Every bundled workflow includes three extension workflows from <code>Extensions\</code>,
+shipped with the package:</p>
+<table>
+<thead>
+<tr>
+<th>file</th>
+<th>role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>key-ctrl-stop.bonsai</code></td>
+<td>completes the stream on the stop file (see above)</td>
+</tr>
+<tr>
+<td><code>key-ctrl-start.bonsai</code></td>
+<td>pass-through: start is handled by <code>--start</code></td>
+</tr>
+<tr>
+<td><code>measure-rate.bonsai</code></td>
+<td>pass-through: no rate display in <code>--no-editor</code> mode</td>
+</tr>
+</tbody>
+</table>
+<h3 id="live-preview">Live preview<a class="headerlink" href="#live-preview" title="Permanent link">&para;</a></h3>
+<p>If a workflow has a <code>&lt;workflow&gt;.bonsai.layout</code> next to it (bundled for
+<code>run-flir-flycap-1cam</code>), each camera starts with <code>--visualizer-layout</code> pointing
+at its own copy of that layout, with the preview window shifted right by camera
+index so several cameras sit side by side. The copy is deleted on <code>stop()</code>.</p>
 <h3 id="alternative-control-mechanisms">Alternative control mechanisms<a class="headerlink" href="#alternative-control-mechanisms" title="Permanent link">&para;</a></h3>
 <p>If per-trial start/stop (without relaunching Bonsai) is ever needed:</p>
 <table>
@@ -901,15 +962,15 @@ they are <strong>inactive in <code>--no-editor</code> mode</strong> and can be i
 </tr>
 </tbody>
 </table>
-<p>For the standard MSW use case (one Bonsai process per session), <code>--start</code> +
-<code>terminate()</code> is complete and correct.</p>
+<p>For the standard MSW use case (one Bonsai process per session), <code>--start</code> plus
+the stop file is sufficient.</p>
 <h2 id="output-structure">Output structure<a class="headerlink" href="#output-structure" title="Permanent link">&para;</a></h2>
 <p>The IronPython transform inside the workflow creates:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>&lt;basepath&gt;/
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  &lt;session&gt;/
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    &lt;session&gt;__&lt;YYYYMMDD_HHMMSS&gt;/
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>      &lt;session&gt;__&lt;YYYYMMDD_HHMMSS&gt;__cam0.avi   # video
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>      &lt;session&gt;__&lt;YYYYMMDD_HHMMSS&gt;__cam0.csv   # metadata (counter, timestamp, gpio)
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>      &lt;session&gt;__&lt;YYYYMMDD_HHMMSS&gt;__cam0.csv   # metadata (gpio, timestamp, counter)
 </code></pre></div>
 <p>The <code>preprocess_camera_csv</code> function loads and cleans the CSV;
 see <a href="../python/">Python API</a> for details.</p>
@@ -975,10 +1036,10 @@ see <a href="../python/">Python API</a> for details.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>
