@@ -110,9 +110,20 @@ cameras.stop()
 ```sh
 msw-flir find-bonsai                         # locate Bonsai.exe
 msw-flir list-cameras --driver flycap        # enumerate connected cameras
+msw-flir probe-cameras --driver flycap       # index and serial, no SDK wrapper
 msw-flir test-record --cam-index 0 --fps 30  # 5-second test recording
 msw-flir run D:\DATA\video mouse001 --n-cameras 2 --fps 60
 ```
+
+### Camera identity
+
+Bonsai selects a camera by SDK index, which shifts when a camera is missing.
+`msw-flir probe-cameras` reads each camera's serial through the vendor C library
+(in a child process, without opening the camera), falling back to the Windows USB
+device list. With `serial` set per camera in the setup, MSW checks the connected
+cameras before launching Bonsai and refuses to start on a mismatch. See
+[CLI reference: probe-cameras](docs/usage/cli.md#probe-cameras) for the fields and
+how to verify it on a rig.
 
 ---
 

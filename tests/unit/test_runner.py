@@ -6,6 +6,8 @@ All subprocess calls are mocked: no Bonsai installation required.
 from __future__ import annotations
 
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import cast
 from unittest.mock import MagicMock, patch
@@ -15,6 +17,7 @@ import pytest
 from msw_flir_bonsai.bonsai_workflows import workflow_path
 from msw_flir_bonsai.runner import (
     BonsaiCameraRunner,
+    BonsaiStartError,
     MultiCameraRunner,
     _find_bonsai_exe,
 )
@@ -88,6 +91,31 @@ class TestBuildCmd:
         joined = " ".join(cmd)
         assert "cam1fps" not in joined
         assert "cam1ts" not in joined
+
+    def test_spinnaker_serial_passed_when_set(self) -> None:
+        runner = BonsaiCameraRunner(
+            workflow="run-flir-spinnaker-1cam",
+            acqdir=_ACQDIR,
+            cam_basename=_CAM_BASENAME,
+            driver="spinnaker",
+            cam_serial="12345678",
+            bonsai_exe="C:/Bonsai.exe",
+        )
+        assert "cam1serial=12345678" in runner._build_cmd()
+
+    def test_serial_omitted_when_empty_or_flycap(self) -> None:
+        spin = _make_runner(workflow="run-flir-spinnaker-1cam", driver="spinnaker")
+        flycap = BonsaiCameraRunner(
+            workflow="run-flir-flycap-1cam",
+            acqdir=_ACQDIR,
+            cam_basename=_CAM_BASENAME,
+            cam_serial="12345678",
+            bonsai_exe="C:/Bonsai.exe",
+        )
+        assert "cam1serial" not in " ".join(spin._build_cmd())
+        cmd = flycap._build_cmd()
+        assert "cam1serial" not in " ".join(cmd)
+        Path(cmd[cmd.index("--visualizer-layout") + 1]).unlink(missing_ok=True)
 
     def test_cam_index_passed(self) -> None:
         runner = _make_runner(cam_index=2)
@@ -191,6 +219,35 @@ class TestStartStop:
         mock_proc.terminate.assert_not_called()
         mock_proc.kill.assert_not_called()
 
+    def test_exited_unexpectedly(self) -> None:
+        runner = _make_runner()
+        proc = self._mock_process(returncode=None)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+        assert not runner.exited_unexpectedly
+        proc.poll.return_value = 0  # Bonsai gave up after the start window
+        assert runner.exited_unexpectedly
+
+    def test_exit_after_stop_is_expected(self) -> None:
+        runner = _make_runner()
+        proc = self._mock_process(returncode=None)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+            runner.stop()
+        proc.poll.return_value = 0
+        assert not runner.exited_unexpectedly
+
+    def test_monitor_flags_its_own_process_only(self) -> None:
+        runner = _make_runner()
+        old = self._mock_process(returncode=0)
+        new = self._mock_process(returncode=None)
+        runner._process = new
+        runner._monitor(old)  # an old thread after a relaunch
+        assert not runner._exited_unexpectedly
+        new.poll.return_value = 0
+        runner._monitor(new)
+        assert runner._exited_unexpectedly
+
     def test_stop_before_start_is_noop(self) -> None:
         runner = _make_runner()
         runner.stop()  # should not raise
@@ -278,6 +335,168 @@ class TestStartStop:
         run.assert_called_once()
         assert run.call_args.args[0] == ["taskkill", "/F", "/T", "/PID", "12345"]
         mock_proc.kill.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# start check: first frame in the .avi
+
+
+class FakeProc:
+    """A Bonsai process that exits ``exit_after`` s after launch (None: never)."""
+
+    def __init__(self, exit_after: float | None = None) -> None:
+        self.t0 = time.monotonic()
+        self.exit_after = exit_after
+        self.pid = 12345
+
+    def poll(self) -> int | None:
+        if self.exit_after is None:
+            return None
+        return 0 if time.monotonic() - self.t0 >= self.exit_after else None
+
+    def wait(self, timeout: float | None = None) -> int:
+        self.exit_after = 0.0  # exits cleanly once asked to stop
+        return 0
+
+
+def _grow_avi_later(path: Path, delay: float) -> threading.Timer:
+    """Write frames to ``path`` after ``delay`` s, then keep appending."""
+
+    def write() -> None:
+        with path.open("ab") as f:
+            for _ in range(3):
+                f.write(b"\0" * 1024)
+                f.flush()
+                time.sleep(0.01)
+
+    timer = threading.Timer(delay, write)
+    timer.start()
+    return timer
+
+
+class TestFirstFrame:
+    @pytest.fixture(autouse=True)
+    def _fast_poll(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("msw_flir_bonsai.runner._START_POLL_S", 0.005)
+
+    def _runner(self, tmp_path: Path, **kwargs) -> BonsaiCameraRunner:
+        return BonsaiCameraRunner(
+            workflow="run-flir-spinnaker-1cam",
+            acqdir=tmp_path,
+            cam_basename="s1.cam0",
+            driver="spinnaker",
+            bonsai_exe="C:/Bonsai.exe",
+            **kwargs,
+        )
+
+    def test_avi_path_matches_workflow(self, tmp_path: Path) -> None:
+        assert self._runner(tmp_path).avi_path == tmp_path / "s1.cam0.avi"
+
+    def test_started_when_avi_grows(self, tmp_path: Path) -> None:
+        runner = self._runner(tmp_path)
+        with patch("subprocess.Popen", return_value=FakeProc()):
+            runner.start()
+        _grow_avi_later(runner.avi_path, 0.05).join()
+        runner.check_started(timeout=5.0)
+        assert runner.is_running
+
+    def test_waits_for_avi(self, tmp_path: Path) -> None:
+        runner = self._runner(tmp_path)
+        with patch("subprocess.Popen", return_value=FakeProc()):
+            runner.start()
+        timer = _grow_avi_later(runner.avi_path, 0.1)
+        runner.check_started(timeout=5.0)
+        timer.join()
+        assert runner.avi_path.stat().st_size > 0
+
+    def test_exit_without_frame_no_relaunch_when_absent(self, tmp_path) -> None:
+        runner = self._runner(tmp_path, retry_delay=0.01)
+        with patch("subprocess.Popen", return_value=FakeProc(0.0)) as popen:
+            runner.start()
+            with pytest.raises(BonsaiStartError, match="no relaunch"):
+                runner.check_started(timeout=5.0, expect_present=False)
+        assert popen.call_count == 1
+
+    def test_exit_without_frame_relaunches_once(self, tmp_path, caplog) -> None:
+        runner = self._runner(tmp_path, retry_delay=0.01)
+        procs = [FakeProc(0.0), FakeProc(0.0)]
+        with patch("subprocess.Popen", side_effect=procs) as popen:
+            runner.start()
+            with pytest.raises(BonsaiStartError, match="after one relaunch"):
+                runner.check_started(timeout=5.0)
+        assert popen.call_count == 2
+        assert "attempt 1 of 2" in caplog.text
+        assert "attempt 2 of 2" in caplog.text
+
+    def test_relaunch_records(self, tmp_path) -> None:
+        runner = self._runner(tmp_path, retry_delay=0.01)
+        with patch("subprocess.Popen", side_effect=[FakeProc(0.0), FakeProc()]):
+            runner.start()
+            timer = _grow_avi_later(runner.avi_path, 0.2)
+            runner.check_started(timeout=5.0)
+        timer.join()
+        assert runner.is_running
+
+    def test_timeout_alive_without_frame_stops(self, tmp_path) -> None:
+        runner = self._runner(tmp_path, retry_delay=0.01)
+        proc = FakeProc()
+        with patch("subprocess.Popen", return_value=proc) as popen:
+            runner.start()
+            with pytest.raises(BonsaiStartError, match="no frame"):
+                runner.check_started(timeout=0.05)
+        assert popen.call_count == 1  # no relaunch after a timeout
+        assert proc.poll() == 0  # stopped
+
+    def test_stale_avi_is_not_a_frame(self, tmp_path) -> None:
+        runner = self._runner(tmp_path)
+        runner.avi_path.write_bytes(b"old run")
+        with patch("subprocess.Popen", return_value=FakeProc()):
+            runner.start()
+            with pytest.raises(BonsaiStartError, match="no frame"):
+                runner.check_started(timeout=0.05)
+
+    def test_monitor_quiet_before_first_frame(self, tmp_path, caplog) -> None:
+        runner = self._runner(tmp_path, retry_delay=None)
+        proc = FakeProc(0.05)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+            with pytest.raises(BonsaiStartError):
+                runner.check_started(timeout=5.0)
+        runner._monitor(cast("subprocess.Popen", proc))
+        assert runner.exited_unexpectedly
+        assert "exited unexpectedly" not in caplog.text
+        assert "without a frame" in caplog.text  # logged once, by the check
+
+    def test_monitor_logs_early_exit_without_check(self, tmp_path, caplog) -> None:
+        runner = self._runner(tmp_path)
+        proc = FakeProc(0.0)
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+        runner._monitor(cast("subprocess.Popen", proc))
+        assert "exited unexpectedly" in caplog.text
+
+    def test_monitor_logs_exit_after_first_frame(self, tmp_path, caplog) -> None:
+        runner = self._runner(tmp_path)
+        proc = FakeProc()
+        with patch("subprocess.Popen", return_value=proc):
+            runner.start()
+        _grow_avi_later(runner.avi_path, 0.0).join()
+        runner.check_started(timeout=5.0)
+        proc.exit_after = 0.0
+        runner._monitor(cast("subprocess.Popen", proc))
+        assert "exited unexpectedly" in caplog.text
+
+    def test_multi_stops_all_when_one_fails(self, tmp_path) -> None:
+        ok, bad = self._runner(tmp_path), self._runner(tmp_path / "b")
+        (tmp_path / "b").mkdir()
+        procs = [FakeProc(), FakeProc(0.0)]
+        multi = MultiCameraRunner([ok, bad])
+        with patch("subprocess.Popen", side_effect=procs):
+            timer = _grow_avi_later(ok.avi_path, 0.02)
+            with pytest.raises(BonsaiStartError, match="exited"):
+                multi.start(timeout=5.0, expect_present=False)
+        timer.join()
+        assert not multi.any_running
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +614,36 @@ class TestMultiCameraRunnerDelegation:
         multi.start()
         for r in runners:
             r.start.assert_called_once()
+
+    def test_start_waits_with_one_shared_deadline(self) -> None:
+        multi, runners = self._make_multi()
+        multi.start(timeout=2.0, expect_present=False)
+        calls = [r.check_started.call_args for r in runners]
+        assert all(c.args == (2.0,) for c in calls)
+        assert all(c.kwargs["expect_present"] is False for c in calls)
+        assert len({c.kwargs["deadline"] for c in calls}) == 1
+
+    def test_start_timeout_zero_skips_wait(self) -> None:
+        multi, runners = self._make_multi()
+        multi.start(timeout=0)
+        for r in runners:
+            r.check_started.assert_not_called()
+
+    def test_start_stops_all_on_early_exit(self) -> None:
+        multi, runners = self._make_multi()
+        runners[1].check_started.side_effect = BonsaiStartError("cam1 exited")
+        with pytest.raises(BonsaiStartError, match="cam1 exited"):
+            multi.start()
+        for r in runners:
+            r.stop.assert_called_once()
+
+    def test_exited_unexpectedly_is_any(self) -> None:
+        multi, runners = self._make_multi()
+        for r in runners:
+            r.exited_unexpectedly = False
+        assert not multi.exited_unexpectedly
+        runners[1].exited_unexpectedly = True
+        assert multi.exited_unexpectedly
 
     def test_stop_calls_all(self) -> None:
         multi, runners = self._make_multi()

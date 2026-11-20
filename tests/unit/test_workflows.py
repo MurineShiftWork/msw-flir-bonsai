@@ -25,3 +25,8 @@ def test_included_workflows_are_bundled(workflow) -> None:
     assert not missing, (
         f"{workflow.name} includes files not in the package: {sorted(set(missing))}"
     )
+
+
+def test_spinnaker_1cam_maps_serial() -> None:
+    xml = (WORKFLOW_DIR / "run-flir-spinnaker-1cam.bonsai").read_text(encoding="utf-8")
+    assert '<Property Name="SerialNumber" DisplayName="cam1serial" />' in xml
