@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from ttl_barcoder.core.config import BarcodeConfig
 
 from msw_flir_bonsai.alignment import (
     align_barcodes,
@@ -15,26 +16,48 @@ from msw_flir_bonsai.alignment import (
 # Helpers
 
 
+# FlyCapture line status words: other bits always set, barcode on bit 31.
+_LOW = 0x70000000
+_HIGH = 0xF0000000
+
+
 def _make_df(timestamps: list[float], gpio: list[int]) -> pd.DataFrame:
+    """Build a camera frame table; *gpio* is the 0/1 level of the bit-31 line."""
     return pd.DataFrame(
         {
             "frame_index": range(len(timestamps)),
             "timestamp_s": timestamps,
-            "gpio_state": gpio,
+            "gpio_state": [_HIGH if g else _LOW for g in gpio],
         }
     )
 
 
-def _gpio_pulse(n_frames: int, pulse_start: int, pulse_len: int) -> list[int]:
-    """Return a GPIO array with a single high pulse."""
-    g = [0] * n_frames
-    for i in range(pulse_start, min(pulse_start + pulse_len, n_frames)):
-        g[i] = 1
-    return g
-
-
 # ---------------------------------------------------------------------------
 # extract_camera_barcodes
+
+
+def _sampled(config, values, starts, fps, n_frames, offset=0.004):
+    """Bpod barcodes as a camera sees them: the line level at each frame."""
+    from ttl_barcoder.core.barcode_ttl import BarcodeTTL
+
+    ttl = BarcodeTTL(config)
+    edges: list[tuple[float, bool]] = []
+    for value, t in zip(values, starts, strict=True):
+        for level, ms in ttl.get_sequence(value):
+            edges.append((t, level))
+            t += ms / 1000
+        edges.append((t, False))
+    ts = [offset + i / fps for i in range(n_frames)]
+    gpio, k, level = [], 0, False
+    for t in ts:
+        while k < len(edges) and edges[k][0] <= t:
+            level = edges[k][1]
+            k += 1
+        gpio.append(int(level))
+    return _make_df(ts, gpio)
+
+
+_VALUES = [0b1111111111 << 13, 2**37 - 1, 1, 123456789, 2**36 + 5]
 
 
 class TestExtractCameraBarcodes:
@@ -43,39 +66,67 @@ class TestExtractCameraBarcodes:
         with pytest.raises(KeyError, match="GPIO column"):
             extract_camera_barcodes(df, gpio_col="missing")
 
-    def test_no_rising_edges_returns_empty(self) -> None:
-        df = _make_df([i * 0.016 for i in range(100)], [0] * 100)
-        result = extract_camera_barcodes(df)
-        assert result == []
+    def test_flat_line_has_no_barcodes(self) -> None:
+        ts = [i * 0.016 for i in range(100)]
+        assert extract_camera_barcodes(_make_df(ts, [0] * 100), BarcodeConfig()) == []
+        assert extract_camera_barcodes(_make_df(ts, [1] * 100), BarcodeConfig()) == []
 
-    def test_constant_high_no_barcode(self) -> None:
-        df = _make_df([i * 0.016 for i in range(100)], [1] * 100)
-        result = extract_camera_barcodes(df)
-        assert result == []
+    @pytest.mark.parametrize(
+        ("config", "fps"),
+        [
+            (BarcodeConfig(bit_duration_ms=100.0, init_duration_ms=100.0), 60.0),
+            (BarcodeConfig(bit_duration_ms=100.0, init_duration_ms=100.0), 66.2),
+            (BarcodeConfig(bit_duration_ms=50.0, init_duration_ms=50.0), 60.0),
+            (BarcodeConfig(), 120.0),
+        ],
+        ids=["100ms-60fps", "100ms-66fps", "50ms-60fps", "35ms-120fps"],
+    )
+    def test_values_match_what_bpod_sent(self, config, fps) -> None:
+        gap = config.total_duration_ms / 1000 + 1.0
+        starts = [2.0 + i * gap for i in range(len(_VALUES))]
+        df = _sampled(config, _VALUES, starts, fps, int((starts[-1] + gap) * fps))
+        found = extract_camera_barcodes(df, config)
+        assert [v for _, v in found] == _VALUES
+        # half a frame before the first high frame: within half a frame of the start
+        for (t, _), start in zip(found, starts, strict=True):
+            assert abs(t - start) <= 0.5 / fps
 
-    def test_single_pulse_produces_one_barcode(self) -> None:
-        fps = 60.0
-        bit_dur = 0.1
-        frames_per_bit = int(round(fps * bit_dur))  # 6 frames per bit
-        n = 300
-        gpio = _gpio_pulse(n, pulse_start=20, pulse_len=frames_per_bit)
-        ts = [i / fps for i in range(n)]
-        df = _make_df(ts, gpio)
-        result = extract_camera_barcodes(df, fps=fps, barcode_bit_duration_s=bit_dur)
-        assert len(result) >= 1
-        t, val = result[0]
-        assert t == pytest.approx(ts[20], abs=0.05)
+    def test_trial_pulses_between_barcodes_are_ignored(self) -> None:
+        config = BarcodeConfig(bit_duration_ms=100.0, init_duration_ms=100.0)
+        df = _sampled(config, _VALUES[:2], [2.0, 12.0], 60.0, 1200)
+        level = (df["gpio_state"] == _HIGH).astype(int).tolist()
+        for f in (420, 421, 422, 900, 901):  # 50 ms trial pulses
+            level[f] = 1
+        df = _make_df(df["timestamp_s"].tolist(), level)
+        assert [v for _, v in extract_camera_barcodes(df, config)] == _VALUES[:2]
 
-    def test_returns_list_of_tuples(self) -> None:
-        fps = 60.0
-        n = 200
-        gpio = _gpio_pulse(n, 10, 6)
-        ts = [i / fps for i in range(n)]
-        df = _make_df(ts, gpio)
-        result = extract_camera_barcodes(df, fps=fps)
-        for item in result:
-            assert isinstance(item, tuple)
-            assert len(item) == 2
+    def test_inverted_line(self) -> None:
+        config = BarcodeConfig(bit_duration_ms=100.0, init_duration_ms=100.0)
+        df = _sampled(config, _VALUES[:2], [2.0, 12.0], 60.0, 1200)
+        flipped = _make_df(
+            df["timestamp_s"].tolist(), (df["gpio_state"] == _LOW).astype(int).tolist()
+        )
+        found = extract_camera_barcodes(flipped, config, inverted=True)
+        assert [v for _, v in found] == _VALUES[:2]
+
+    def test_bits_shorter_than_three_frames_are_refused(self, caplog) -> None:
+        config = BarcodeConfig()  # 35 ms bits: 2.1 frames at 60 fps
+        df = _sampled(config, _VALUES[:1], [1.0], 60.0, 240)
+        assert extract_camera_barcodes(df, config) == []
+        assert "shorter than three frames" in caplog.text
+
+    def test_a_line_high_from_the_first_frame_is_not_a_barcode(self) -> None:
+        ts = [i / 120 for i in range(600)]
+        assert extract_camera_barcodes(_make_df(ts, [1] * 600), BarcodeConfig()) == []
+
+    def test_without_settings_warns_and_uses_defaults(self, caplog) -> None:
+        df = _sampled(BarcodeConfig(), _VALUES[:1], [1.0], 120.0, 480)
+        assert [v for _, v in extract_camera_barcodes(df)] == _VALUES[:1]
+        assert "No barcode settings" in caplog.text
+
+    def test_other_line_bit_sees_no_edges(self) -> None:
+        df = _sampled(BarcodeConfig(), _VALUES[:1], [1.0], 120.0, 480)
+        assert extract_camera_barcodes(df, BarcodeConfig(), line_bit=30) == []
 
 
 # ---------------------------------------------------------------------------

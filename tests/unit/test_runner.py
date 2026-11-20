@@ -673,3 +673,29 @@ class TestMultiCameraRunnerDelegation:
         for r in runners:
             r.is_running = False
         assert not multi.any_running
+
+
+def test_start_writes_camera_metadata(tmp_path, monkeypatch) -> None:
+    import json
+    import subprocess
+
+    class _Proc:
+        pid = 1
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _Proc())
+    runner = _make_runner(
+        workflow="run-flir-spinnaker-2cam",
+        acqdir=str(tmp_path),
+        driver="spinnaker",
+        cam_index=1,
+    )
+    runner.start()
+    runner._stopped.set()
+    meta = json.loads((tmp_path / f"{_CAM_BASENAME}.camera.json").read_text())
+    assert meta["driver"] == "spinnaker"
+    assert meta["workflow"] == "run-flir-spinnaker-2cam"
+    assert meta["camera_index"] == 1
+    assert meta["timestamp_encoding"] == "nanoseconds"

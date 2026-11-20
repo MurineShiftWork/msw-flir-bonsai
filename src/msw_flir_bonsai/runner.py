@@ -189,6 +189,7 @@ class BonsaiCameraRunner:
 
         cmd = self._build_cmd()
         logging.info(f"[BonsaiCamera cam{self._cam_index}] Starting: {' '.join(cmd)}")
+        self._write_metadata()
 
         self._stopped.clear()
         self._exited_unexpectedly = False
@@ -227,6 +228,18 @@ class BonsaiCameraRunner:
             f"[BonsaiCamera cam{self._cam_index}] Process started "
             f"(pid={self._process.pid})"
         )
+
+    def _write_metadata(self) -> None:
+        """Write the per-camera metadata file (driver, CSV layout); never raises."""
+        from msw_flir_bonsai.metadata import camera_metadata, write_camera_metadata
+
+        meta = camera_metadata(
+            driver=self._driver,
+            workflow=self._workflow_path.stem,
+            cam_index=self._cam_index,
+            fps=self._fps,
+        )
+        write_camera_metadata(self._acqdir, self._cam_basename, meta)
 
     @property
     def avi_path(self) -> Path:
