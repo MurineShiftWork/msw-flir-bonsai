@@ -73,20 +73,32 @@ See the [murineshiftwork setup config docs](https://larsrollik.github.io/murines
 
 ## Preprocessing camera timestamps
 
-Bonsai writes a CSV per camera with frame counter, hardware timestamp, and
-optionally a GPIO state column.  The timestamps module cleans up rollovers.
+Bonsai writes a headerless CSV per camera with three columns, in this order:
+
+| Column | FlyCapture | Spinnaker |
+|---|---|---|
+| `gpio_state` | `embeddedGPIOPinState` | `ExposureEndLineStatusAll` |
+| `timestamp_raw` | `embeddedTimeStamp` (packed cycle timer) | `Timestamp` (ns) |
+| `frame_counter` | `embeddedFrameCounter` | `FrameID` |
+
+`preprocess_camera_csv` decodes `timestamp_raw` per driver into `timestamp_s`.
+FlyCapture packs seconds mod 128 (bits 31-25), 8 kHz cycles (bits 24-12) and
+1/3072 cycle offsets (bits 11-0); the 128 s rollover is unwrapped. Spinnaker
+nanoseconds are divided by 1e9.
 
 ```python
 from msw_flir_bonsai.timestamps import preprocess_camera_csv
 
 df = preprocess_camera_csv(
-    "cam0__20260524_120000.csv",
-    ts_cycle_s=128.0,       # FlyCapture cycle period; np.inf for Spinnaker
-    counter_bits=32,
+    "cam0.timestamps.csv",
+    driver="flycap",        # or "spinnaker"
     session_start_s=None,   # or a Bpod event time to zero the clock
 )
-# df columns: frame_index, timestamp_raw, timestamp_s, frame_counter, gpio_state
+# df columns: frame_index, gpio_state, timestamp_raw, frame_counter, timestamp_s
 ```
+
+`gpio_state` is the bitmask of all camera lines. Read one line with
+`line_state(df["gpio_state"], bit)`; the FlyCapture barcode input is bit 31.
 
 ### Detect dropped frames
 
@@ -102,12 +114,22 @@ print(f"{n_dropped} dropped frames")
 
 ## Aligning camera timestamps to Bpod
 
+Both functions read one line of `gpio_state`, chosen by `line_bit` (default 31,
+the FlyCapture barcode input). The Spinnaker line bit depends on the wiring:
+confirm it on a recording and pass it explicitly.
+
 ### Barcode alignment
 
+The camera must decode with the settings Bpod sent the barcodes with (the session's
+`barcodes:`, or the task's barcode settings). Bits need about three frames: 100 ms bits
+for a 60 fps camera. Shorter bits are refused with a warning.
+
 ```python
+from ttl_barcoder import BarcodeConfig
 from msw_flir_bonsai.alignment import extract_camera_barcodes, align_barcodes
 
-cam_barcodes = extract_camera_barcodes(df, gpio_col="gpio_state", fps=60.0)
+config = BarcodeConfig(bit_duration_ms=100, init_duration_ms=100)
+cam_barcodes = extract_camera_barcodes(df, config, line_bit=31)
 # bpod_barcodes: list of (time_s, barcode_int) from Bpod BNC events
 offset_s = align_barcodes(bpod_barcodes, cam_barcodes, max_hamming=2)
 
@@ -120,6 +142,6 @@ df["bpod_time"] = df["timestamp_s"] + offset_s
 from msw_flir_bonsai.alignment import align_ttl_edges
 
 # bpod_trial_times: list of trial-start times in Bpod clock
-offset_s = align_ttl_edges(df, bpod_trial_times, gpio_col="gpio_state")
+offset_s = align_ttl_edges(df, bpod_trial_times, line_bit=31)
 df["bpod_time"] = df["timestamp_s"] + offset_s
 ```

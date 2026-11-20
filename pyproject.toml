@@ -19,6 +19,8 @@ dependencies = [
     "msw-plugin-api>=0.4.0",
     "numpy",
     "pandas",
+    # the barcode decoder needs Python 3.11; on 3.10 the rest of the package still works
+    "ttl-barcoder>=0.6.0; python_version >= '3.11'",
     "typer",
 ]
 
@@ -85,7 +87,7 @@ docs = [
 [tool.commitizen]
 name = "cz_conventional_commits"
 version_provider = "commitizen"
-version = "0.5.2"
+version = "0.6.2"
 version_files = ["VERSION"]
 tag_format = "v$version"
 update_changelog_on_bump = false

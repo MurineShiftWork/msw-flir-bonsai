@@ -22,8 +22,9 @@ def _video(d: Path, label: str) -> Path:
 
 def _timestamps(d: Path, label: str, rows: int = 3) -> Path:
     p = d / f"{_BASENAME}.msw.{label}.timestamps.csv"
-    # Bonsai CSV: headerless, frame_counter,timestamp_raw[,gpio_state]
-    lines = [f"{i},{i * 0.0167:.4f},0" for i in range(rows)]
+    # Bonsai CSV: headerless gpio_state,timestamp_raw,frame_counter (FlyCapture
+    # packed timestamp: cycle count in bits 24-12, 8000 per second)
+    lines = [f"0,{(i * 133) << 12},{i}" for i in range(rows)]
     p.write_text("\n".join(lines) + "\n")
     return p
 
@@ -99,6 +100,16 @@ def test_load_parses_timestamps(tmp_path):
     assert "timestamp_s" in frames.columns
 
 
+def test_load_spinnaker_driver_decodes_nanoseconds(tmp_path):
+    _video(tmp_path, "top.0")
+    p = tmp_path / f"{_BASENAME}.msw.top.0.timestamps.csv"
+    p.write_text("0,1000000000,0\n0,1016666667,1\n")
+    session = load_session(tmp_path, load=True, driver="spinnaker")
+    frames = session.cameras["top.0"].frames
+    assert frames is not None
+    assert frames["timestamp_s"].tolist() == pytest.approx([1.0, 1.016666667])
+
+
 def test_load_false_does_not_parse(tmp_path):
     _video(tmp_path, "top.0")
     _timestamps(tmp_path, "top.0")
@@ -121,3 +132,67 @@ def test_summary_shape(tmp_path):
 def test_missing_directory_raises(tmp_path):
     with pytest.raises(NotADirectoryError):
         load_session(tmp_path / "does_not_exist")
+
+
+def _metadata(d: Path, label: str, driver: str) -> None:
+    from msw_flir_bonsai.metadata import camera_metadata, write_camera_metadata
+
+    meta = camera_metadata(driver=driver, workflow="w", cam_index=0, fps=None)
+    write_camera_metadata(d, f"{_BASENAME}.msw.{label}", meta)
+
+
+def test_metadata_file_sets_the_driver(tmp_path):
+    _video(tmp_path, "top.0")
+    p = tmp_path / f"{_BASENAME}.msw.top.0.timestamps.csv"
+    p.write_text("0,1000000000,0\n0,1016666667,1\n")
+    _metadata(tmp_path, "top.0", "spinnaker")
+    session = load_session(tmp_path, load=True)
+    cam = session.cameras["top.0"]
+    assert cam.metadata is not None
+    assert cam.metadata["csv_columns"] == [
+        "gpio_state",
+        "timestamp_raw",
+        "frame_counter",
+    ]
+    assert cam.frames is not None
+    assert cam.frames["timestamp_s"].tolist() == pytest.approx([1.0, 1.016666667])
+
+
+def test_metadata_driver_wins_over_the_parameter(tmp_path):
+    _video(tmp_path, "top.0")
+    _timestamps(tmp_path, "top.0")
+    _metadata(tmp_path, "top.0", "flycap")
+    session = load_session(tmp_path, load=True, driver="spinnaker")
+    assert session.cameras["top.0"].driver("spinnaker") == "flycap"
+    assert session.cameras["top.0"].error is None
+
+
+def test_without_metadata_the_driver_is_flycap(tmp_path):
+    _video(tmp_path, "top.0")
+    _timestamps(tmp_path, "top.0")
+    session = load_session(tmp_path)
+    assert session.cameras["top.0"].metadata is None
+    assert session.cameras["top.0"].driver() == "flycap"
+
+
+def test_metadata_records_the_frame_rate_in_effect():
+    from msw_flir_bonsai.metadata import camera_metadata
+
+    flycap = camera_metadata(driver="flycap", workflow="w", cam_index=1, fps=None)
+    assert (flycap["camera_index"], flycap["fps"]) == (1, 60.0)
+    assert flycap["fps_source"] == "workflow default"
+    set_fps = camera_metadata(driver="flycap", workflow="w", cam_index=0, fps=30)
+    assert (set_fps["fps"], set_fps["fps_source"]) == (30.0, "cam1fps")
+    spin = camera_metadata(driver="spinnaker", workflow="w", cam_index=0, fps=None)
+    assert (spin["fps"], spin["fps_source"]) == (None, "camera user set")
+
+
+def test_barcodes_from_a_loaded_camera(tmp_path):
+    from msw_flir_bonsai.alignment import extract_camera_barcodes
+
+    _video(tmp_path, "top.0")
+    _timestamps(tmp_path, "top.0")
+    cam = load_session(tmp_path, load=True).cameras["top.0"]
+    assert extract_camera_barcodes(cam) == extract_camera_barcodes(cam.frames)
+    with pytest.raises(ValueError, match="no frames loaded"):
+        extract_camera_barcodes(load_session(tmp_path).cameras["top.0"])

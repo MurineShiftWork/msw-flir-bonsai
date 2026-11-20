@@ -70,7 +70,7 @@ msw-flir test-record --cam-index 0 --driver flycap --fps 30 --duration 5
 ```
 
 Output is written to `~/msw_flir_test/` by default.  You should see a `.avi`
-video file and a `.csv` metadata file (frame counter, timestamp, GPIO state).
+video file and a `.csv` metadata file (GPIO state, timestamp, frame counter).
 
 ```sh
 # Check the CSV has the expected columns
@@ -82,8 +82,8 @@ print(df.columns.tolist())
 EOF
 ```
 
-Expected columns: `frame_index`, `frame_counter`, `timestamp_raw`, `gpio_state`
-(the last column is present only when a GPIO line is connected).
+Expected columns: `frame_index`, `gpio_state`, `timestamp_raw`, `frame_counter`.
+Pass `driver="spinnaker"` for Spinnaker recordings.
 
 ## First camera connection from Python
 
