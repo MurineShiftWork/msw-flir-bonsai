@@ -42,15 +42,15 @@ package manager (`Tools → Manage Packages`):
 | `Bonsai.Vision.Design` | Vision editor support | 2.8.5 |
 | `Bonsai.Scripting.IronPython` | IronPython inline scripts | 2.8.5 |
 | `Bonsai.Scripting.IronPython.Design` | IronPython editor | 2.8.5 |
-| `Bonsai.PointGrey2` | FlyCapture2 camera driver | 0.3.0 |
-| `Bonsai.Spinnaker` | Spinnaker camera driver | 0.4.0 |
+| `Bonsai.PointGrey2` | FlyCapture2 camera driver | 1.0.0 |
+| `Bonsai.Spinnaker` | Spinnaker camera driver | 0.10.0 |
 
 ### Camera drivers (Windows)
 
 | Driver | Version | Notes |
 |---|---|---|
 | FlyCapture2 SDK | 2.13.3 | Required for PointGrey / FLIR Grasshopper cameras |
-| Spinnaker SDK | 3.x | Required for FLIR Blackfly S / BFS cameras |
+| Spinnaker SDK | 4.2 | Required for Spinnaker cameras; Bonsai.Spinnaker 0.10 uses the installed SDK |
 
 > **Note:** FlyCapture2 and Spinnaker are mutually exclusive on the same machine in some
 > versions. If using Spinnaker cameras, install only the Spinnaker SDK.

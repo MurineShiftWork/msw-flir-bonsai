@@ -61,8 +61,14 @@ class TestBuildCmd:
         finally:
             layout.unlink(missing_ok=True)
 
-    def test_no_preview_layout_without_layout_file(self) -> None:
+    def test_spinnaker_has_preview_layout(self) -> None:
         runner = _make_runner(workflow="run-flir-spinnaker-1cam", driver="spinnaker")
+        cmd = runner._build_cmd()
+        assert "--visualizer-layout" in cmd
+        Path(cmd[cmd.index("--visualizer-layout") + 1]).unlink(missing_ok=True)
+
+    def test_no_preview_layout_without_layout_file(self) -> None:
+        runner = _make_runner(workflow="run-flir-spinnaker-2cam", driver="spinnaker")
         assert "--visualizer-layout" not in runner._build_cmd()
 
     def test_flycap_includes_ts_and_framecounter(self) -> None:
